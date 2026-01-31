@@ -1,0 +1,7 @@
+apps/api
+docs
+infrastructure
+.git
+.gitignore
+docker-compose.yml
+*.md
