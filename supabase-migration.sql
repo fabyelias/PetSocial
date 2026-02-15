@@ -202,16 +202,33 @@ CREATE TRIGGER trg_comments_updated_at
   BEFORE UPDATE ON comments
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+-- Tabla de registro de emails
+CREATE TABLE IF NOT EXISTS user_emails (
+  auth_id UUID,
+  email TEXT,
+  email_confirmed_at TIMESTAMPTZ,
+  deleted_at TIMESTAMPTZ,
+  source TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_emails_auth_id ON user_emails(auth_id);
+
 -- Crear perfil automático al registrarse
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO profiles (id, email, display_name)
+  INSERT INTO public.profiles (id, email, display_name)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'display_name', split_part(NEW.email, '@', 1))
-  );
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.user_emails (auth_id, email, email_confirmed_at, source)
+  VALUES (NEW.id, NEW.email, NEW.email_confirmed_at, 'signup');
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
