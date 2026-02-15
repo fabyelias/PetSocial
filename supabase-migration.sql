@@ -1,24 +1,43 @@
 -- ============================================================
--- PetSocial - Supabase Database Migration
--- Ejecutar este SQL completo en Supabase SQL Editor
+-- PetSocial - Supabase Database Migration (IDEMPOTENTE)
+-- Se puede ejecutar multiples veces sin error
+-- Ejecutar en Supabase SQL Editor
 -- ============================================================
 
 -- ============================================================
--- 1. ENUMS (Tipos personalizados)
+-- 1. ENUMS
 -- ============================================================
 
-CREATE TYPE user_role AS ENUM ('user', 'moderator', 'admin');
-CREATE TYPE user_status AS ENUM ('pending', 'active', 'suspended', 'deleted');
-CREATE TYPE pet_species AS ENUM ('dog', 'cat', 'bird', 'rabbit', 'hamster', 'fish', 'reptile', 'other');
-CREATE TYPE post_visibility AS ENUM ('public', 'followers', 'private');
-CREATE TYPE media_type AS ENUM ('image', 'video');
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('user', 'moderator', 'admin');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE user_status AS ENUM ('pending', 'active', 'suspended', 'deleted');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE pet_species AS ENUM ('dog', 'cat', 'bird', 'rabbit', 'hamster', 'fish', 'reptile', 'other');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE post_visibility AS ENUM ('public', 'followers', 'private');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE media_type AS ENUM ('image', 'video');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================================
 -- 2. TABLAS
 -- ============================================================
 
--- Perfiles de usuario (extiende auth.users de Supabase)
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE NOT NULL,
   display_name TEXT,
@@ -32,11 +51,10 @@ CREATE TABLE profiles (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_profiles_email ON profiles(email);
-CREATE INDEX idx_profiles_status ON profiles(status);
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_status ON profiles(status);
 
--- Mascotas
-CREATE TABLE pets (
+CREATE TABLE IF NOT EXISTS pets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
@@ -57,13 +75,12 @@ CREATE TABLE pets (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_pets_owner ON pets(owner_id);
-CREATE INDEX idx_pets_species ON pets(species);
-CREATE INDEX idx_pets_country ON pets(country);
-CREATE INDEX idx_pets_active ON pets(is_active);
+CREATE INDEX IF NOT EXISTS idx_pets_owner ON pets(owner_id);
+CREATE INDEX IF NOT EXISTS idx_pets_species ON pets(species);
+CREATE INDEX IF NOT EXISTS idx_pets_country ON pets(country);
+CREATE INDEX IF NOT EXISTS idx_pets_active ON pets(is_active);
 
--- Posts
-CREATE TABLE posts (
+CREATE TABLE IF NOT EXISTS posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   pet_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
   caption TEXT CHECK (char_length(caption) <= 2200),
@@ -78,14 +95,13 @@ CREATE TABLE posts (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_posts_pet ON posts(pet_id);
-CREATE INDEX idx_posts_visibility ON posts(visibility);
-CREATE INDEX idx_posts_engagement ON posts(engagement_score DESC);
-CREATE INDEX idx_posts_created ON posts(created_at DESC);
-CREATE INDEX idx_posts_hidden ON posts(is_hidden);
+CREATE INDEX IF NOT EXISTS idx_posts_pet ON posts(pet_id);
+CREATE INDEX IF NOT EXISTS idx_posts_visibility ON posts(visibility);
+CREATE INDEX IF NOT EXISTS idx_posts_engagement ON posts(engagement_score DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_posts_hidden ON posts(is_hidden);
 
--- Media de posts (imágenes/videos)
-CREATE TABLE post_media (
+CREATE TABLE IF NOT EXISTS post_media (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   type media_type NOT NULL,
@@ -102,10 +118,9 @@ CREATE TABLE post_media (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_post_media_post ON post_media(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_media_post ON post_media(post_id);
 
--- Seguidores (pet sigue a pet)
-CREATE TABLE follows (
+CREATE TABLE IF NOT EXISTS follows (
   follower_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
   following_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -113,22 +128,20 @@ CREATE TABLE follows (
   CONSTRAINT no_self_follow CHECK (follower_id != following_id)
 );
 
-CREATE INDEX idx_follows_follower ON follows(follower_id);
-CREATE INDEX idx_follows_following ON follows(following_id);
+CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
 
--- Likes
-CREATE TABLE likes (
+CREATE TABLE IF NOT EXISTS likes (
   pet_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
   post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (pet_id, post_id)
 );
 
-CREATE INDEX idx_likes_post ON likes(post_id);
-CREATE INDEX idx_likes_pet ON likes(pet_id);
+CREATE INDEX IF NOT EXISTS idx_likes_post ON likes(post_id);
+CREATE INDEX IF NOT EXISTS idx_likes_pet ON likes(pet_id);
 
--- Comentarios (con respuestas anidadas)
-CREATE TABLE comments (
+CREATE TABLE IF NOT EXISTS comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   pet_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
@@ -142,26 +155,25 @@ CREATE TABLE comments (
   deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX idx_comments_post ON comments(post_id);
-CREATE INDEX idx_comments_pet ON comments(pet_id);
-CREATE INDEX idx_comments_parent ON comments(parent_id);
+CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_comments_pet ON comments(pet_id);
+CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id);
 
--- Bookmarks (guardar posts)
-CREATE TABLE bookmarks (
+CREATE TABLE IF NOT EXISTS bookmarks (
   pet_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
   post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (pet_id, post_id)
 );
 
-CREATE INDEX idx_bookmarks_pet ON bookmarks(pet_id);
-CREATE INDEX idx_bookmarks_post ON bookmarks(post_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_pet ON bookmarks(pet_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_post ON bookmarks(post_id);
 
 -- ============================================================
--- 3. FUNCIONES AUXILIARES
+-- 3. FUNCIONES Y TRIGGERS
 -- ============================================================
 
--- Función para actualizar updated_at automáticamente
+-- updated_at automático
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -170,24 +182,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Triggers para updated_at
+DROP TRIGGER IF EXISTS trg_profiles_updated_at ON profiles;
 CREATE TRIGGER trg_profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_pets_updated_at ON pets;
 CREATE TRIGGER trg_pets_updated_at
   BEFORE UPDATE ON pets
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_posts_updated_at ON posts;
 CREATE TRIGGER trg_posts_updated_at
   BEFORE UPDATE ON posts
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+DROP TRIGGER IF EXISTS trg_comments_updated_at ON comments;
 CREATE TRIGGER trg_comments_updated_at
   BEFORE UPDATE ON comments
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- Función: crear perfil automático al registrarse
+-- Crear perfil automático al registrarse
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -201,11 +216,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
--- Función: actualizar contadores de followers
+-- Contadores de followers
 CREATE OR REPLACE FUNCTION update_follow_counts()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -221,11 +237,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trg_follow_counts ON follows;
 CREATE TRIGGER trg_follow_counts
   AFTER INSERT OR DELETE ON follows
   FOR EACH ROW EXECUTE FUNCTION update_follow_counts();
 
--- Función: actualizar contadores de likes en posts
+-- Contadores de likes en posts
 CREATE OR REPLACE FUNCTION update_post_likes_count()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -239,11 +256,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trg_post_likes_count ON likes;
 CREATE TRIGGER trg_post_likes_count
   AFTER INSERT OR DELETE ON likes
   FOR EACH ROW EXECUTE FUNCTION update_post_likes_count();
 
--- Función: actualizar contadores de comentarios en posts
+-- Contadores de comentarios en posts
 CREATE OR REPLACE FUNCTION update_post_comments_count()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -263,11 +281,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trg_post_comments_count ON comments;
 CREATE TRIGGER trg_post_comments_count
   AFTER INSERT OR DELETE ON comments
   FOR EACH ROW EXECUTE FUNCTION update_post_comments_count();
 
--- Función: actualizar contador de posts en pets
+-- Contador de posts en pets
 CREATE OR REPLACE FUNCTION update_pet_posts_count()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -281,11 +300,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trg_pet_posts_count ON posts;
 CREATE TRIGGER trg_pet_posts_count
   AFTER INSERT OR DELETE ON posts
   FOR EACH ROW EXECUTE FUNCTION update_pet_posts_count();
 
--- Función helper: verificar si un pet pertenece al usuario actual
+-- Helper: verificar si un pet pertenece al usuario actual
 CREATE OR REPLACE FUNCTION is_pet_owner(pet_id UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -295,7 +315,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Función helper: verificar si un pet sigue a otro
+-- Helper: verificar si un pet sigue a otro
 CREATE OR REPLACE FUNCTION is_following(follower UUID, target UUID)
 RETURNS BOOLEAN AS $$
 BEGIN
@@ -306,10 +326,9 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
--- 4. ROW LEVEL SECURITY (RLS) - POLITICAS DE SEGURIDAD
+-- 4. ROW LEVEL SECURITY (RLS)
 -- ============================================================
 
--- Activar RLS en todas las tablas
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
@@ -319,31 +338,42 @@ ALTER TABLE likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookmarks ENABLE ROW LEVEL SECURITY;
 
--- ============================================================
+-- Limpiar políticas existentes antes de crearlas
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN
+    SELECT policyname, tablename FROM pg_policies
+    WHERE schemaname = 'public'
+    AND policyname IN (
+      'profiles_select_public', 'profiles_update_own',
+      'pets_select_active', 'pets_insert_owner', 'pets_update_owner', 'pets_delete_owner',
+      'posts_select_visible', 'posts_insert_owner', 'posts_update_owner', 'posts_delete_owner',
+      'post_media_select', 'post_media_insert_owner', 'post_media_delete_owner',
+      'follows_select_public', 'follows_insert_own_pet', 'follows_delete_own_pet',
+      'likes_select_public', 'likes_insert_own_pet', 'likes_delete_own_pet',
+      'comments_select_visible', 'comments_insert_own_pet', 'comments_update_own', 'comments_delete_own',
+      'bookmarks_select_own', 'bookmarks_insert_own_pet', 'bookmarks_delete_own_pet'
+    )
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', pol.policyname, pol.tablename);
+  END LOOP;
+END $$;
+
 -- PROFILES
--- ============================================================
-
--- Cualquiera puede ver perfiles
 CREATE POLICY "profiles_select_public"
-  ON profiles FOR SELECT
-  USING (true);
+  ON profiles FOR SELECT USING (true);
 
--- Solo el propio usuario puede actualizar su perfil
 CREATE POLICY "profiles_update_own"
   ON profiles FOR UPDATE
   USING (id = auth.uid())
   WITH CHECK (id = auth.uid());
 
--- ============================================================
 -- PETS
--- ============================================================
-
--- Cualquiera puede ver mascotas activas
 CREATE POLICY "pets_select_active"
-  ON pets FOR SELECT
-  USING (is_active = true);
+  ON pets FOR SELECT USING (is_active = true);
 
--- Solo el dueño puede crear mascotas (máximo 10)
 CREATE POLICY "pets_insert_owner"
   ON pets FOR INSERT
   WITH CHECK (
@@ -351,22 +381,15 @@ CREATE POLICY "pets_insert_owner"
     AND (SELECT COUNT(*) FROM pets WHERE owner_id = auth.uid()) < 10
   );
 
--- Solo el dueño puede actualizar sus mascotas
 CREATE POLICY "pets_update_owner"
   ON pets FOR UPDATE
   USING (owner_id = auth.uid())
   WITH CHECK (owner_id = auth.uid());
 
--- Solo el dueño puede eliminar sus mascotas
 CREATE POLICY "pets_delete_owner"
-  ON pets FOR DELETE
-  USING (owner_id = auth.uid());
+  ON pets FOR DELETE USING (owner_id = auth.uid());
 
--- ============================================================
 -- POSTS
--- ============================================================
-
--- Ver posts públicos, o de seguidores si sigues al pet, o propios
 CREATE POLICY "posts_select_visible"
   ON posts FOR SELECT
   USING (
@@ -388,242 +411,148 @@ CREATE POLICY "posts_select_visible"
     )
   );
 
--- Solo el dueño del pet puede crear posts
 CREATE POLICY "posts_insert_owner"
-  ON posts FOR INSERT
-  WITH CHECK (is_pet_owner(pet_id));
+  ON posts FOR INSERT WITH CHECK (is_pet_owner(pet_id));
 
--- Solo el dueño del pet puede actualizar posts
 CREATE POLICY "posts_update_owner"
   ON posts FOR UPDATE
   USING (is_pet_owner(pet_id))
   WITH CHECK (is_pet_owner(pet_id));
 
--- Solo el dueño del pet puede eliminar posts
 CREATE POLICY "posts_delete_owner"
-  ON posts FOR DELETE
-  USING (is_pet_owner(pet_id));
+  ON posts FOR DELETE USING (is_pet_owner(pet_id));
 
--- ============================================================
 -- POST_MEDIA
--- ============================================================
-
--- Ver media de posts que puedes ver
 CREATE POLICY "post_media_select"
   ON post_media FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM posts WHERE id = post_media.post_id
-    )
-  );
+  USING (EXISTS (SELECT 1 FROM posts WHERE id = post_media.post_id));
 
--- Solo el dueño del post puede agregar media
 CREATE POLICY "post_media_insert_owner"
   ON post_media FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM posts p
-      WHERE p.id = post_media.post_id AND is_pet_owner(p.pet_id)
-    )
-  );
+  WITH CHECK (EXISTS (SELECT 1 FROM posts p WHERE p.id = post_media.post_id AND is_pet_owner(p.pet_id)));
 
--- Solo el dueño puede eliminar media
 CREATE POLICY "post_media_delete_owner"
   ON post_media FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM posts p
-      WHERE p.id = post_media.post_id AND is_pet_owner(p.pet_id)
-    )
-  );
+  USING (EXISTS (SELECT 1 FROM posts p WHERE p.id = post_media.post_id AND is_pet_owner(p.pet_id)));
 
--- ============================================================
 -- FOLLOWS
--- ============================================================
-
--- Cualquiera puede ver follows
 CREATE POLICY "follows_select_public"
-  ON follows FOR SELECT
-  USING (true);
+  ON follows FOR SELECT USING (true);
 
--- Solo puedes seguir desde tus propias mascotas
 CREATE POLICY "follows_insert_own_pet"
-  ON follows FOR INSERT
-  WITH CHECK (is_pet_owner(follower_id));
+  ON follows FOR INSERT WITH CHECK (is_pet_owner(follower_id));
 
--- Solo puedes dejar de seguir desde tus propias mascotas
 CREATE POLICY "follows_delete_own_pet"
-  ON follows FOR DELETE
-  USING (is_pet_owner(follower_id));
+  ON follows FOR DELETE USING (is_pet_owner(follower_id));
 
--- ============================================================
 -- LIKES
--- ============================================================
-
--- Cualquiera puede ver likes
 CREATE POLICY "likes_select_public"
-  ON likes FOR SELECT
-  USING (true);
+  ON likes FOR SELECT USING (true);
 
--- Solo puedes dar like desde tus propias mascotas
 CREATE POLICY "likes_insert_own_pet"
-  ON likes FOR INSERT
-  WITH CHECK (is_pet_owner(pet_id));
+  ON likes FOR INSERT WITH CHECK (is_pet_owner(pet_id));
 
--- Solo puedes quitar like desde tus propias mascotas
 CREATE POLICY "likes_delete_own_pet"
-  ON likes FOR DELETE
-  USING (is_pet_owner(pet_id));
+  ON likes FOR DELETE USING (is_pet_owner(pet_id));
 
--- ============================================================
 -- COMMENTS
--- ============================================================
-
--- Ver comentarios no ocultos
 CREATE POLICY "comments_select_visible"
-  ON comments FOR SELECT
-  USING (is_hidden = false AND deleted_at IS NULL);
+  ON comments FOR SELECT USING (is_hidden = false AND deleted_at IS NULL);
 
--- Solo puedes comentar desde tus propias mascotas
 CREATE POLICY "comments_insert_own_pet"
-  ON comments FOR INSERT
-  WITH CHECK (is_pet_owner(pet_id));
+  ON comments FOR INSERT WITH CHECK (is_pet_owner(pet_id));
 
--- Solo puedes editar tus propios comentarios
 CREATE POLICY "comments_update_own"
   ON comments FOR UPDATE
   USING (is_pet_owner(pet_id))
   WITH CHECK (is_pet_owner(pet_id));
 
--- Solo puedes eliminar tus propios comentarios
 CREATE POLICY "comments_delete_own"
-  ON comments FOR DELETE
-  USING (is_pet_owner(pet_id));
+  ON comments FOR DELETE USING (is_pet_owner(pet_id));
 
--- ============================================================
 -- BOOKMARKS
--- ============================================================
-
--- Solo puedes ver tus propios bookmarks
 CREATE POLICY "bookmarks_select_own"
-  ON bookmarks FOR SELECT
-  USING (is_pet_owner(pet_id));
+  ON bookmarks FOR SELECT USING (is_pet_owner(pet_id));
 
--- Solo puedes guardar desde tus propias mascotas
 CREATE POLICY "bookmarks_insert_own_pet"
-  ON bookmarks FOR INSERT
-  WITH CHECK (is_pet_owner(pet_id));
+  ON bookmarks FOR INSERT WITH CHECK (is_pet_owner(pet_id));
 
--- Solo puedes quitar bookmarks propios
 CREATE POLICY "bookmarks_delete_own_pet"
-  ON bookmarks FOR DELETE
-  USING (is_pet_owner(pet_id));
+  ON bookmarks FOR DELETE USING (is_pet_owner(pet_id));
 
 -- ============================================================
 -- 5. STORAGE BUCKETS
 -- ============================================================
 
--- Crear bucket para avatares
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
-  'avatars',
-  'avatars',
-  true,
-  5242880, -- 5MB
+  'avatars', 'avatars', true, 5242880,
   ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-);
+) ON CONFLICT (id) DO NOTHING;
 
--- Crear bucket para media de posts
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
-  'post-media',
-  'post-media',
-  true,
-  52428800, -- 50MB
+  'post-media', 'post-media', true, 52428800,
   ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/quicktime', 'video/webm']
-);
+) ON CONFLICT (id) DO NOTHING;
 
--- Crear bucket para covers
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
-  'covers',
-  'covers',
-  true,
-  10485760, -- 10MB
+  'covers', 'covers', true, 10485760,
   ARRAY['image/jpeg', 'image/png', 'image/webp']
-);
+) ON CONFLICT (id) DO NOTHING;
 
--- ============================================================
--- STORAGE POLICIES
--- ============================================================
+-- STORAGE POLICIES (limpiar antes de crear)
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN
+    SELECT policyname FROM pg_policies
+    WHERE schemaname = 'storage' AND tablename = 'objects'
+    AND policyname IN (
+      'avatars_select_public', 'avatars_insert_auth', 'avatars_update_own', 'avatars_delete_own',
+      'post_media_storage_select_public', 'post_media_storage_insert_auth', 'post_media_storage_delete_own',
+      'covers_select_public', 'covers_insert_auth', 'covers_delete_own'
+    )
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', pol.policyname);
+  END LOOP;
+END $$;
 
--- Avatars: cualquiera puede ver, solo autenticados pueden subir/eliminar propios
 CREATE POLICY "avatars_select_public"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'avatars');
+  ON storage.objects FOR SELECT USING (bucket_id = 'avatars');
 
 CREATE POLICY "avatars_insert_auth"
   ON storage.objects FOR INSERT
-  WITH CHECK (
-    bucket_id = 'avatars'
-    AND auth.role() = 'authenticated'
-    AND (storage.foldername(name))[1] = auth.uid()::text
-  );
+  WITH CHECK (bucket_id = 'avatars' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 CREATE POLICY "avatars_update_own"
   ON storage.objects FOR UPDATE
-  USING (
-    bucket_id = 'avatars'
-    AND auth.role() = 'authenticated'
-    AND (storage.foldername(name))[1] = auth.uid()::text
-  );
+  USING (bucket_id = 'avatars' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 CREATE POLICY "avatars_delete_own"
   ON storage.objects FOR DELETE
-  USING (
-    bucket_id = 'avatars'
-    AND auth.role() = 'authenticated'
-    AND (storage.foldername(name))[1] = auth.uid()::text
-  );
+  USING (bucket_id = 'avatars' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = auth.uid()::text);
 
--- Post media: cualquiera puede ver, solo autenticados pueden subir/eliminar propios
 CREATE POLICY "post_media_storage_select_public"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'post-media');
+  ON storage.objects FOR SELECT USING (bucket_id = 'post-media');
 
 CREATE POLICY "post_media_storage_insert_auth"
   ON storage.objects FOR INSERT
-  WITH CHECK (
-    bucket_id = 'post-media'
-    AND auth.role() = 'authenticated'
-    AND (storage.foldername(name))[1] = auth.uid()::text
-  );
+  WITH CHECK (bucket_id = 'post-media' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 CREATE POLICY "post_media_storage_delete_own"
   ON storage.objects FOR DELETE
-  USING (
-    bucket_id = 'post-media'
-    AND auth.role() = 'authenticated'
-    AND (storage.foldername(name))[1] = auth.uid()::text
-  );
+  USING (bucket_id = 'post-media' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = auth.uid()::text);
 
--- Covers: cualquiera puede ver, solo autenticados pueden subir/eliminar propios
 CREATE POLICY "covers_select_public"
-  ON storage.objects FOR SELECT
-  USING (bucket_id = 'covers');
+  ON storage.objects FOR SELECT USING (bucket_id = 'covers');
 
 CREATE POLICY "covers_insert_auth"
   ON storage.objects FOR INSERT
-  WITH CHECK (
-    bucket_id = 'covers'
-    AND auth.role() = 'authenticated'
-    AND (storage.foldername(name))[1] = auth.uid()::text
-  );
+  WITH CHECK (bucket_id = 'covers' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 CREATE POLICY "covers_delete_own"
   ON storage.objects FOR DELETE
-  USING (
-    bucket_id = 'covers'
-    AND auth.role() = 'authenticated'
-    AND (storage.foldername(name))[1] = auth.uid()::text
-  );
+  USING (bucket_id = 'covers' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = auth.uid()::text);

@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { Eye, EyeOff, Loader2, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/auth.store';
-import { AxiosError } from 'axios';
 
 const registerSchema = z
   .object({
@@ -80,9 +79,7 @@ export default function RegisterPage() {
       toast.success('¡Cuenta creada exitosamente!');
       router.push('/onboarding/pet');
     } catch (error) {
-      const axiosError = error as AxiosError<{ error: { message: string } }>;
-      const message =
-        axiosError.response?.data?.error?.message || 'Error al crear la cuenta';
+      const message = error instanceof Error ? error.message : 'Error al crear la cuenta';
       toast.error(message);
     }
   };

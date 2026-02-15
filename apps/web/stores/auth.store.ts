@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { apiClient, api } from '@/lib/api/client';
-import { setTokens, clearTokens, getTokens, hasValidTokens } from '@/lib/auth/tokens';
+import { supabase } from '@/lib/supabase';
+import type { Database } from '@/types/database.types';
+
+type ProfileRow = Database['public']['Tables']['profiles']['Row'];
+type PetRow = Database['public']['Tables']['pets']['Row'];
 
 // Types
 export interface User {
@@ -9,7 +12,7 @@ export interface User {
   email: string;
   displayName: string | null;
   role: 'user' | 'moderator' | 'admin';
-  status: 'pending' | 'active' | 'suspended';
+  status: 'pending' | 'active' | 'suspended' | 'deleted';
   emailVerifiedAt: string | null;
   createdAt: string;
 }
@@ -48,6 +51,51 @@ interface AuthState {
   updatePet: (petId: string, data: Partial<Pet>) => void;
 }
 
+// Helper: cargar perfil desde Supabase
+async function loadProfile(userId: string): Promise<User | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error || !data) return null;
+
+  const profile = data as ProfileRow;
+  return {
+    id: profile.id,
+    email: profile.email,
+    displayName: profile.display_name,
+    role: profile.role,
+    status: profile.status,
+    emailVerifiedAt: profile.email_verified_at,
+    createdAt: profile.created_at,
+  };
+}
+
+// Helper: cargar mascotas desde Supabase
+async function loadPets(userId: string): Promise<Pet[]> {
+  const { data, error } = await supabase
+    .from('pets')
+    .select('*')
+    .eq('owner_id', userId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: true });
+
+  if (error || !data) return [];
+
+  return (data as PetRow[]).map((p) => ({
+    id: p.id,
+    name: p.name,
+    species: p.species,
+    breed: p.breed,
+    avatarUrl: p.avatar_url,
+    followersCount: p.followers_count,
+    followingCount: p.following_count,
+    postsCount: p.posts_count,
+  }));
+}
+
 export const useAuthStore = create<AuthState>()(
   devtools(
     (set, get) => ({
@@ -65,25 +113,25 @@ export const useAuthStore = create<AuthState>()(
         return pets.find((p) => p.id === currentPetId) || pets[0] || null;
       },
 
-      // Initialize: verificar tokens y cargar usuario
+      // Initialize: verificar sesión de Supabase y cargar datos
       initialize: async () => {
         if (get().isInitialized) return;
 
         set({ isLoading: true });
 
         try {
-          if (!hasValidTokens()) {
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (!session?.user) {
             set({ isInitialized: true, isLoading: false });
             return;
           }
 
-          // Cargar usuario y mascotas
           const [user, pets] = await Promise.all([
-            api<User>(apiClient.get('/users/me')),
-            api<Pet[]>(apiClient.get('/pets/me')),
+            loadProfile(session.user.id),
+            loadPets(session.user.id),
           ]);
 
-          // Recuperar mascota seleccionada del storage
           const savedPetId = localStorage.getItem('petsocial_current_pet');
           const currentPetId = pets.find((p) => p.id === savedPetId)?.id || pets[0]?.id || null;
 
@@ -95,9 +143,7 @@ export const useAuthStore = create<AuthState>()(
             isInitialized: true,
             isLoading: false,
           });
-        } catch (error) {
-          // Token inválido o expirado
-          clearTokens();
+        } catch {
           set({
             user: null,
             pets: [],
@@ -109,25 +155,28 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Login
+      // Login con Supabase Auth
       login: async (email: string, password: string) => {
         set({ isLoading: true });
 
         try {
-          const response = await api<{
-            user: User;
-            pets: Pet[];
-            accessToken: string;
-            refreshToken: string;
-          }>(apiClient.post('/auth/login', { email, password }));
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
 
-          setTokens(response.accessToken, response.refreshToken);
+          if (error) throw new Error(error.message);
 
-          const currentPetId = response.pets[0]?.id || null;
+          const [user, pets] = await Promise.all([
+            loadProfile(data.user.id),
+            loadPets(data.user.id),
+          ]);
+
+          const currentPetId = pets[0]?.id || null;
 
           set({
-            user: response.user,
-            pets: response.pets,
+            user,
+            pets,
             currentPetId,
             isAuthenticated: true,
             isLoading: false,
@@ -138,21 +187,31 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Register
+      // Register con Supabase Auth
       register: async (email: string, password: string, displayName?: string) => {
         set({ isLoading: true });
 
         try {
-          const response = await api<{
-            user: User;
-            accessToken: string;
-            refreshToken: string;
-          }>(apiClient.post('/auth/register', { email, password, displayName }));
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                display_name: displayName || email.split('@')[0],
+              },
+            },
+          });
 
-          setTokens(response.accessToken, response.refreshToken);
+          if (error) throw new Error(error.message);
+          if (!data.user) throw new Error('Error al crear la cuenta');
+
+          // El trigger handle_new_user() crea el perfil automáticamente
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const user = await loadProfile(data.user.id);
 
           set({
-            user: response.user,
+            user,
             pets: [],
             currentPetId: null,
             isAuthenticated: true,
@@ -167,12 +226,8 @@ export const useAuthStore = create<AuthState>()(
       // Logout
       logout: async () => {
         try {
-          const { refreshToken } = getTokens();
-          if (refreshToken) {
-            await apiClient.post('/auth/logout', { refreshToken }).catch(() => {});
-          }
+          await supabase.auth.signOut();
         } finally {
-          clearTokens();
           localStorage.removeItem('petsocial_current_pet');
           set({
             user: null,
@@ -188,9 +243,15 @@ export const useAuthStore = create<AuthState>()(
         if (!get().isAuthenticated) return;
 
         try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.user) {
+            get().logout();
+            return;
+          }
+
           const [user, pets] = await Promise.all([
-            api<User>(apiClient.get('/users/me')),
-            api<Pet[]>(apiClient.get('/pets/me')),
+            loadProfile(session.user.id),
+            loadPets(session.user.id),
           ]);
 
           set((state) => ({
@@ -198,8 +259,7 @@ export const useAuthStore = create<AuthState>()(
             pets,
             currentPetId: pets.find((p) => p.id === state.currentPetId)?.id || pets[0]?.id || null,
           }));
-        } catch (error) {
-          // Si falla, probablemente el token expiró
+        } catch {
           get().logout();
         }
       },
@@ -231,6 +291,20 @@ export const useAuthStore = create<AuthState>()(
     { name: 'auth-store' }
   )
 );
+
+// Escuchar cambios de sesión de Supabase
+if (typeof window !== 'undefined') {
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') {
+      useAuthStore.setState({
+        user: null,
+        pets: [],
+        currentPetId: null,
+        isAuthenticated: false,
+      });
+    }
+  });
+}
 
 // Selector hooks para optimizar renders
 export const useUser = () => useAuthStore((state) => state.user);

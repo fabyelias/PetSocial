@@ -287,12 +287,28 @@ export type Database = {
         };
       };
     };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      is_pet_owner: {
+        Args: { pet_id: string };
+        Returns: boolean;
+      };
+      is_following: {
+        Args: { follower: string; target: string };
+        Returns: boolean;
+      };
+    };
     Enums: {
       user_role: 'user' | 'moderator' | 'admin';
       user_status: 'pending' | 'active' | 'suspended' | 'deleted';
       pet_species: 'dog' | 'cat' | 'bird' | 'rabbit' | 'hamster' | 'fish' | 'reptile' | 'other';
       post_visibility: 'public' | 'followers' | 'private';
       media_type: 'image' | 'video';
+    };
+    CompositeTypes: {
+      [_ in never]: never;
     };
   };
 };

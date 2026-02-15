@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/stores/auth.store';
-import { AxiosError } from 'axios';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido').min(1, 'Email requerido'),
@@ -41,9 +40,7 @@ export default function LoginPage() {
       toast.success('¡Bienvenido de vuelta!');
       router.push('/feed');
     } catch (error) {
-      const axiosError = error as AxiosError<{ error: { message: string } }>;
-      const message =
-        axiosError.response?.data?.error?.message || 'Error al iniciar sesión';
+      const message = error instanceof Error ? error.message : 'Error al iniciar sesión';
       toast.error(message);
     }
   };
