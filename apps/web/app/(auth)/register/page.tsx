@@ -77,7 +77,7 @@ export default function RegisterPage() {
         data.displayName || undefined
       );
       toast.success('¡Cuenta creada exitosamente!');
-      router.push('/onboarding/pet');
+      router.push('/feed');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al crear la cuenta';
       toast.error(message);
