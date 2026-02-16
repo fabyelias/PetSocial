@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, PlusSquare, Heart, User } from 'lucide-react';
+import { Home, Search, PlusSquare, Heart } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
 import { useCurrentPet } from '@/stores/auth.store';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 const navItems = [
   { href: '/feed', icon: Home, label: 'Inicio' },
@@ -17,22 +19,85 @@ const navItems = [
 export function MobileNav() {
   const pathname = usePathname();
   const currentPet = useCurrentPet();
+  const [notifCount, setNotifCount] = useState(0);
+
+  const fetchNotifCount = useCallback(async () => {
+    if (!currentPet) return;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: myPosts } = await supabase
+      .from('posts')
+      .select('id')
+      .eq('pet_id', currentPet.id);
+    const myPostIds = myPosts?.map((p) => p.id) || [];
+
+    if (myPostIds.length === 0) {
+      const { count } = await supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('following_id', currentPet.id)
+        .gte('created_at', since);
+      setNotifCount(count || 0);
+      return;
+    }
+
+    const [{ count: likeCount }, { count: commentCount }, { count: followCount }] = await Promise.all([
+      supabase.from('likes').select('*', { count: 'exact', head: true }).in('post_id', myPostIds).neq('pet_id', currentPet.id).gte('created_at', since),
+      supabase.from('comments').select('*', { count: 'exact', head: true }).in('post_id', myPostIds).neq('pet_id', currentPet.id).gte('created_at', since),
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', currentPet.id).gte('created_at', since),
+    ]);
+
+    setNotifCount((likeCount || 0) + (commentCount || 0) + (followCount || 0));
+  }, [currentPet?.id]);
+
+  useEffect(() => {
+    fetchNotifCount();
+    const interval = setInterval(fetchNotifCount, 30000);
+
+    if (currentPet) {
+      const channel = supabase
+        .channel('mobile-notifs')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => fetchNotifCount())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => fetchNotifCount())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => fetchNotifCount())
+        .subscribe();
+
+      return () => {
+        clearInterval(interval);
+        supabase.removeChannel(channel);
+      };
+    }
+
+    return () => clearInterval(interval);
+  }, [currentPet?.id, fetchNotifCount]);
+
+  useEffect(() => {
+    if (pathname === '/notifications') setNotifCount(0);
+  }, [pathname]);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 safe-bottom z-50">
       <div className="flex items-center justify-around h-16">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
+          const count = item.href === '/notifications' ? notifCount : 0;
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center justify-center w-16 h-full',
+                'flex flex-col items-center justify-center w-16 h-full relative',
                 isActive ? 'text-primary-500' : 'text-gray-600 dark:text-gray-400'
               )}
             >
-              <item.icon className={cn('w-6 h-6', isActive && 'fill-current')} />
+              <div className="relative">
+                <item.icon className={cn('w-6 h-6', isActive && 'fill-current')} />
+                {count > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5">
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
+              </div>
             </Link>
           );
         })}

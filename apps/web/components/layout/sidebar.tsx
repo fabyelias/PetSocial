@@ -8,22 +8,22 @@ import {
   PlusSquare,
   Heart,
   MessageCircle,
-  User,
   Settings,
   LogOut,
   ChevronDown,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore, useCurrentPet, usePets } from '@/stores/auth.store';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 const navItems = [
   { href: '/feed', icon: Home, label: 'Inicio' },
   { href: '/search', icon: Search, label: 'Buscar' },
   { href: '/create', icon: PlusSquare, label: 'Crear' },
-  { href: '/notifications', icon: Heart, label: 'Notificaciones' },
-  { href: '/messages', icon: MessageCircle, label: 'Mensajes' },
+  { href: '/notifications', icon: Heart, label: 'Notificaciones', badge: true },
+  { href: '/messages', icon: MessageCircle, label: 'Mensajes', badge: true },
 ];
 
 export function Sidebar() {
@@ -33,6 +33,84 @@ export function Sidebar() {
   const logout = useAuthStore((state) => state.logout);
   const setCurrentPet = useAuthStore((state) => state.setCurrentPet);
   const [showPetSelector, setShowPetSelector] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
+  const [msgCount, setMsgCount] = useState(0);
+
+  const fetchNotifCount = useCallback(async () => {
+    if (!currentPet) return;
+    // Count recent likes + comments + follows on my posts in last 24h
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: myPosts } = await supabase
+      .from('posts')
+      .select('id')
+      .eq('pet_id', currentPet.id);
+    const myPostIds = myPosts?.map((p) => p.id) || [];
+
+    if (myPostIds.length === 0) {
+      // Still check follows
+      const { count: followCount } = await supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('following_id', currentPet.id)
+        .gte('created_at', since);
+      setNotifCount(followCount || 0);
+      return;
+    }
+
+    const [{ count: likeCount }, { count: commentCount }, { count: followCount }] = await Promise.all([
+      supabase.from('likes').select('*', { count: 'exact', head: true }).in('post_id', myPostIds).neq('pet_id', currentPet.id).gte('created_at', since),
+      supabase.from('comments').select('*', { count: 'exact', head: true }).in('post_id', myPostIds).neq('pet_id', currentPet.id).gte('created_at', since),
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', currentPet.id).gte('created_at', since),
+    ]);
+
+    setNotifCount((likeCount || 0) + (commentCount || 0) + (followCount || 0));
+  }, [currentPet?.id]);
+
+  const fetchMsgCount = useCallback(async () => {
+    if (!currentPet) return;
+    const { count } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('receiver_pet_id', currentPet.id)
+      .eq('is_read', false);
+    setMsgCount(count || 0);
+  }, [currentPet?.id]);
+
+  useEffect(() => {
+    fetchNotifCount();
+    fetchMsgCount();
+
+    // Poll every 30 seconds
+    const interval = setInterval(() => {
+      fetchNotifCount();
+      fetchMsgCount();
+    }, 30000);
+
+    // Real-time subscription for instant notifications
+    if (currentPet) {
+      const channel = supabase
+        .channel('sidebar-notifs')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => fetchNotifCount())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => fetchNotifCount())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => fetchNotifCount())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => fetchMsgCount())
+        .subscribe();
+
+      return () => {
+        clearInterval(interval);
+        supabase.removeChannel(channel);
+      };
+    }
+
+    return () => clearInterval(interval);
+  }, [currentPet?.id, fetchNotifCount, fetchMsgCount]);
+
+  // Reset notif count when visiting notifications page
+  useEffect(() => {
+    if (pathname === '/notifications') setNotifCount(0);
+    if (pathname === '/messages') setMsgCount(0);
+  }, [pathname]);
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 lg:w-72 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">
@@ -114,23 +192,31 @@ export function Sidebar() {
         <ul className="space-y-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
+            const count = item.href === '/notifications' ? notifCount : item.href === '/messages' ? msgCount : 0;
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-4 px-4 py-3 rounded-xl transition-colors',
+                    'flex items-center gap-4 px-4 py-3 rounded-xl transition-colors relative',
                     isActive
                       ? 'bg-gray-100 dark:bg-gray-900 font-semibold'
                       : 'hover:bg-gray-50 dark:hover:bg-gray-900/50'
                   )}
                 >
-                  <item.icon
-                    className={cn(
-                      'w-6 h-6',
-                      isActive ? 'text-primary-500' : 'text-gray-600 dark:text-gray-400'
+                  <div className="relative">
+                    <item.icon
+                      className={cn(
+                        'w-6 h-6',
+                        isActive ? 'text-primary-500' : 'text-gray-600 dark:text-gray-400'
+                      )}
+                    />
+                    {count > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                        {count > 99 ? '99+' : count}
+                      </span>
                     )}
-                  />
+                  </div>
                   <span>{item.label}</span>
                 </Link>
               </li>

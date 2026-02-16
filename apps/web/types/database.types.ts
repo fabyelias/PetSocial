@@ -353,6 +353,93 @@ export type Database = {
           },
         ];
       };
+      conversations: {
+        Row: {
+          id: string;
+          pet_a_id: string;
+          pet_b_id: string;
+          last_message_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          pet_a_id: string;
+          pet_b_id: string;
+          last_message_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          pet_a_id?: string;
+          pet_b_id?: string;
+          last_message_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'conversations_pet_a_id_fkey';
+            columns: ['pet_a_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'conversations_pet_b_id_fkey';
+            columns: ['pet_b_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_pet_id: string;
+          receiver_pet_id: string;
+          content: string;
+          is_read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_pet_id: string;
+          receiver_pet_id: string;
+          content: string;
+          is_read?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          conversation_id?: string;
+          sender_pet_id?: string;
+          receiver_pet_id?: string;
+          content?: string;
+          is_read?: boolean;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'messages_conversation_id_fkey';
+            columns: ['conversation_id'];
+            isOneToOne: false;
+            referencedRelation: 'conversations';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'messages_sender_pet_id_fkey';
+            columns: ['sender_pet_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'messages_receiver_pet_id_fkey';
+            columns: ['receiver_pet_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       bookmarks: {
         Row: {
           pet_id: string;
