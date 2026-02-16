@@ -2,28 +2,43 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, PlusSquare, Heart } from 'lucide-react';
+import { Home, Search, PlusSquare, Heart, MessageCircle } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useCurrentPet } from '@/stores/auth.store';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { playNotificationSound, playMessageSound } from '@/lib/sounds';
 
 const navItems = [
   { href: '/feed', icon: Home, label: 'Inicio' },
   { href: '/search', icon: Search, label: 'Buscar' },
   { href: '/create', icon: PlusSquare, label: 'Crear' },
   { href: '/notifications', icon: Heart, label: 'Notificaciones' },
+  { href: '/messages', icon: MessageCircle, label: 'Mensajes' },
 ];
 
 export function MobileNav() {
   const pathname = usePathname();
   const currentPet = useCurrentPet();
   const [notifCount, setNotifCount] = useState(0);
+  const [msgCount, setMsgCount] = useState(0);
+
+  const fetchMsgCount = useCallback(async () => {
+    if (!currentPet) return;
+    const { count } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('receiver_pet_id', currentPet.id)
+      .eq('is_read', false);
+    setMsgCount(count || 0);
+  }, [currentPet?.id]);
 
   const fetchNotifCount = useCallback(async () => {
     if (!currentPet) return;
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const lastSeenKey = `notif_seen_${currentPet.id}`;
+    const lastSeen = localStorage.getItem(lastSeenKey);
+    const since = lastSeen || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     const { data: myPosts } = await supabase
       .from('posts')
@@ -52,14 +67,19 @@ export function MobileNav() {
 
   useEffect(() => {
     fetchNotifCount();
-    const interval = setInterval(fetchNotifCount, 30000);
+    fetchMsgCount();
+    const interval = setInterval(() => {
+      fetchNotifCount();
+      fetchMsgCount();
+    }, 30000);
 
     if (currentPet) {
       const channel = supabase
         .channel('mobile-notifs')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => fetchNotifCount())
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => fetchNotifCount())
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => fetchNotifCount())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => { fetchNotifCount(); playNotificationSound(); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => { fetchNotifCount(); playNotificationSound(); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => { fetchNotifCount(); playNotificationSound(); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchMsgCount(); playMessageSound(); })
         .subscribe();
 
       return () => {
@@ -69,18 +89,24 @@ export function MobileNav() {
     }
 
     return () => clearInterval(interval);
-  }, [currentPet?.id, fetchNotifCount]);
+  }, [currentPet?.id, fetchNotifCount, fetchMsgCount]);
 
   useEffect(() => {
-    if (pathname === '/notifications') setNotifCount(0);
-  }, [pathname]);
+    if (pathname === '/notifications') {
+      setNotifCount(0);
+      if (currentPet) {
+        localStorage.setItem(`notif_seen_${currentPet.id}`, new Date().toISOString());
+      }
+    }
+    if (pathname === '/messages') setMsgCount(0);
+  }, [pathname, currentPet?.id]);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 safe-bottom z-50">
       <div className="flex items-center justify-around h-16">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
-          const count = item.href === '/notifications' ? notifCount : 0;
+          const count = item.href === '/notifications' ? notifCount : item.href === '/messages' ? msgCount : 0;
           return (
             <Link
               key={item.href}

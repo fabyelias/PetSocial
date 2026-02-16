@@ -17,6 +17,7 @@ import { useAuthStore, useCurrentPet, usePets } from '@/stores/auth.store';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { playNotificationSound, playMessageSound } from '@/lib/sounds';
 
 const navItems = [
   { href: '/feed', icon: Home, label: 'Inicio' },
@@ -38,8 +39,10 @@ export function Sidebar() {
 
   const fetchNotifCount = useCallback(async () => {
     if (!currentPet) return;
-    // Count recent likes + comments + follows on my posts in last 24h
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Count notifications since last time user visited /notifications
+    const lastSeenKey = `notif_seen_${currentPet.id}`;
+    const lastSeen = localStorage.getItem(lastSeenKey);
+    const since = lastSeen || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
     const { data: myPosts } = await supabase
       .from('posts')
@@ -48,7 +51,6 @@ export function Sidebar() {
     const myPostIds = myPosts?.map((p) => p.id) || [];
 
     if (myPostIds.length === 0) {
-      // Still check follows
       const { count: followCount } = await supabase
         .from('follows')
         .select('*', { count: 'exact', head: true })
@@ -91,10 +93,10 @@ export function Sidebar() {
     if (currentPet) {
       const channel = supabase
         .channel('sidebar-notifs')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => fetchNotifCount())
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => fetchNotifCount())
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => fetchNotifCount())
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => fetchMsgCount())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => { fetchNotifCount(); playNotificationSound(); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => { fetchNotifCount(); playNotificationSound(); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => { fetchNotifCount(); playNotificationSound(); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchMsgCount(); playMessageSound(); })
         .subscribe();
 
       return () => {
@@ -106,11 +108,16 @@ export function Sidebar() {
     return () => clearInterval(interval);
   }, [currentPet?.id, fetchNotifCount, fetchMsgCount]);
 
-  // Reset notif count when visiting notifications page
+  // Reset notif count when visiting notifications/messages page and save timestamp
   useEffect(() => {
-    if (pathname === '/notifications') setNotifCount(0);
+    if (pathname === '/notifications') {
+      setNotifCount(0);
+      if (currentPet) {
+        localStorage.setItem(`notif_seen_${currentPet.id}`, new Date().toISOString());
+      }
+    }
     if (pathname === '/messages') setMsgCount(0);
-  }, [pathname]);
+  }, [pathname, currentPet?.id]);
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 lg:w-72 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 flex flex-col">

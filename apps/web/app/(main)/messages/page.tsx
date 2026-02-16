@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Loader2, MessageCircle, Send, ArrowLeft, Search } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useCurrentPet } from '@/stores/auth.store';
 import { formatRelativeTime, cn } from '@/lib/utils';
+import { playMessageSound } from '@/lib/sounds';
 
 interface Conversation {
   id: string;
@@ -154,7 +155,16 @@ export default function MessagesPage() {
             created_at: row.created_at as string,
             is_read: row.is_read as boolean,
           };
-          setMessages((prev) => [...prev, newMsg]);
+          // Avoid duplicates: skip if we already have this message (or it was optimistically added by us)
+          setMessages((prev) => {
+            const exists = prev.some((m) => m.id === newMsg.id);
+            if (exists) return prev;
+            // If this is our own message, it was already added optimistically
+            if (currentPet && (row.sender_pet_id as string) === currentPet.id) return prev;
+            // Play sound for incoming messages
+            playMessageSound();
+            return [...prev, newMsg];
+          });
 
           // Mark as read if we're the receiver
           const receiverId = row.receiver_pet_id as string;
@@ -200,23 +210,40 @@ export default function MessagesPage() {
   const handleSend = async () => {
     if (!currentPet || !activeConversation || !messageText.trim()) return;
     setIsSending(true);
+    const content = messageText.trim();
+
+    // Optimistically add the message to the UI immediately
+    const optimisticMsg: Message = {
+      id: `temp-${Date.now()}`,
+      content,
+      sender_pet_id: currentPet.id,
+      created_at: new Date().toISOString(),
+      is_read: false,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setMessageText('');
 
     try {
-      await supabase.from('messages').insert({
+      const { data } = await supabase.from('messages').insert({
         conversation_id: activeConversation.id,
         sender_pet_id: currentPet.id,
         receiver_pet_id: activeConversation.otherPet.id,
-        content: messageText.trim(),
-      });
+        content,
+      }).select('id').single();
+
+      // Replace temp id with real id
+      if (data) {
+        setMessages((prev) => prev.map((m) => m.id === optimisticMsg.id ? { ...m, id: data.id } : m));
+      }
 
       await supabase
         .from('conversations')
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', activeConversation.id);
-
-      setMessageText('');
     } catch {
-      // Message will appear via real-time or fail silently
+      // Remove optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      setMessageText(content);
     } finally {
       setIsSending(false);
     }

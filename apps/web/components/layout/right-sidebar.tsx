@@ -32,6 +32,15 @@ export function RightSidebar() {
   useEffect(() => {
     if (!currentPet || !user) return;
 
+    // Fetch who current pet is already following
+    supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', currentPet.id)
+      .then(({ data }) => {
+        if (data) setFollowingIds(new Set(data.map((f) => f.following_id)));
+      });
+
     supabase
       .from('pets')
       .select('id, name, species, breed, avatar_url, followers_count')
