@@ -48,6 +48,7 @@ export type Database = {
           last_active?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
       };
       pets: {
         Row: {
@@ -108,6 +109,15 @@ export type Database = {
           posts_count?: number;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'pets_owner_id_fkey';
+            columns: ['owner_id'];
+            isOneToOne: false;
+            referencedRelation: 'profiles';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       posts: {
         Row: {
@@ -150,6 +160,15 @@ export type Database = {
           hidden_reason?: string | null;
           updated_at?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'posts_pet_id_fkey';
+            columns: ['pet_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       post_media: {
         Row: {
@@ -198,6 +217,15 @@ export type Database = {
           is_processed?: boolean;
           processing_error?: string | null;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'post_media_post_id_fkey';
+            columns: ['post_id'];
+            isOneToOne: false;
+            referencedRelation: 'posts';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       follows: {
         Row: {
@@ -214,6 +242,22 @@ export type Database = {
           follower_id?: string;
           following_id?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'follows_follower_id_fkey';
+            columns: ['follower_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'follows_following_id_fkey';
+            columns: ['following_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       likes: {
         Row: {
@@ -230,6 +274,22 @@ export type Database = {
           pet_id?: string;
           post_id?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'likes_pet_id_fkey';
+            columns: ['pet_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'likes_post_id_fkey';
+            columns: ['post_id'];
+            isOneToOne: false;
+            referencedRelation: 'posts';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       comments: {
         Row: {
@@ -269,6 +329,29 @@ export type Database = {
           updated_at?: string;
           deleted_at?: string | null;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'comments_post_id_fkey';
+            columns: ['post_id'];
+            isOneToOne: false;
+            referencedRelation: 'posts';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'comments_pet_id_fkey';
+            columns: ['pet_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'comments_parent_id_fkey';
+            columns: ['parent_id'];
+            isOneToOne: false;
+            referencedRelation: 'comments';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       bookmarks: {
         Row: {
@@ -285,6 +368,22 @@ export type Database = {
           pet_id?: string;
           post_id?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: 'bookmarks_pet_id_fkey';
+            columns: ['pet_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'bookmarks_post_id_fkey';
+            columns: ['post_id'];
+            isOneToOne: false;
+            referencedRelation: 'posts';
+            referencedColumns: ['id'];
+          },
+        ];
       };
     };
     Views: {

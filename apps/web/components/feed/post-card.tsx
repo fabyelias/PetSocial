@@ -38,18 +38,21 @@ interface Post {
   likesCount: number;
   commentsCount: number;
   isLiked: boolean;
+  isBookmarked?: boolean;
   createdAt: string;
 }
 
 interface PostCardProps {
   post: Post;
   onLike: () => void;
+  onBookmark?: () => void;
+  onComment?: (content: string) => void;
 }
 
-export function PostCard({ post, onLike }: PostCardProps) {
+export function PostCard({ post, onLike, onBookmark, onComment }: PostCardProps) {
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
-  const [isBookmarked, setIsBookmarked] = useState(false);
   const [showFullCaption, setShowFullCaption] = useState(false);
+  const [commentText, setCommentText] = useState('');
 
   const hasMultipleMedia = post.media.length > 1;
   const currentMedia = post.media[currentMediaIndex];
@@ -168,11 +171,11 @@ export function PostCard({ post, onLike }: PostCardProps) {
           </div>
 
           <button
-            onClick={() => setIsBookmarked(!isBookmarked)}
-            className={cn(isBookmarked && 'text-primary-500')}
+            onClick={onBookmark}
+            className={cn(post.isBookmarked && 'text-primary-500')}
           >
             <Bookmark
-              className={cn('w-6 h-6', isBookmarked && 'fill-current')}
+              className={cn('w-6 h-6', post.isBookmarked && 'fill-current')}
             />
           </button>
         </div>
@@ -223,16 +226,31 @@ export function PostCard({ post, onLike }: PostCardProps) {
 
       {/* Comment input */}
       <div className="border-t border-gray-100 dark:border-gray-800 px-4 py-3">
-        <div className="flex items-center gap-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (commentText.trim() && onComment) {
+              onComment(commentText.trim());
+              setCommentText('');
+            }
+          }}
+          className="flex items-center gap-3"
+        >
           <input
             type="text"
+            value={commentText}
+            onChange={(e) => setCommentText(e.target.value)}
             placeholder="Añade un comentario..."
             className="flex-1 bg-transparent text-sm placeholder-gray-400 focus:outline-none"
           />
-          <button className="text-primary-500 font-semibold text-sm hover:text-primary-600 disabled:opacity-50">
+          <button
+            type="submit"
+            disabled={!commentText.trim()}
+            className="text-primary-500 font-semibold text-sm hover:text-primary-600 disabled:opacity-50"
+          >
             Publicar
           </button>
-        </div>
+        </form>
       </div>
     </article>
   );

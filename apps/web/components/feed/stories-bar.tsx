@@ -1,26 +1,41 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useCurrentPet } from '@/stores/auth.store';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
+import Link from 'next/link';
 
-// TODO: Fetch from API
-const mockStories = [
-  { id: '1', petName: 'Luna', avatarUrl: null, hasUnseenStory: true },
-  { id: '2', petName: 'Rocky', avatarUrl: null, hasUnseenStory: true },
-  { id: '3', petName: 'Michi', avatarUrl: null, hasUnseenStory: false },
-  { id: '4', petName: 'Bella', avatarUrl: null, hasUnseenStory: true },
-  { id: '5', petName: 'Max', avatarUrl: null, hasUnseenStory: false },
-  { id: '6', petName: 'Coco', avatarUrl: null, hasUnseenStory: true },
-  { id: '7', petName: 'Simba', avatarUrl: null, hasUnseenStory: false },
-  { id: '8', petName: 'Nala', avatarUrl: null, hasUnseenStory: true },
-];
+interface FollowedPet {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+}
 
 export function StoriesBar() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const currentPet = useCurrentPet();
+  const [followedPets, setFollowedPets] = useState<FollowedPet[]>([]);
+
+  useEffect(() => {
+    if (!currentPet) return;
+    supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', currentPet.id)
+      .then(async ({ data }) => {
+        if (!data || data.length === 0) return;
+        const ids = data.map((f) => f.following_id);
+        const { data: pets } = await supabase
+          .from('pets')
+          .select('id, name, avatar_url')
+          .in('id', ids)
+          .limit(15);
+        if (pets) setFollowedPets(pets);
+      });
+  }, [currentPet?.id]);
 
   const scroll = (direction: 'left' | 'right') => {
     if (scrollRef.current) {
@@ -71,23 +86,24 @@ export function StoriesBar() {
           </span>
         </button>
 
-        {/* Other stories */}
-        {mockStories.map((story) => (
-          <button
-            key={story.id}
+        {/* Followed pets */}
+        {followedPets.map((pet) => (
+          <Link
+            key={pet.id}
+            href={`/pet/${pet.id}`}
             className="flex flex-col items-center gap-1.5 shrink-0"
           >
             <Avatar
-              src={story.avatarUrl}
-              alt={story.petName}
+              src={pet.avatar_url}
+              alt={pet.name}
               size="lg"
               showStoryRing
-              hasUnseenStory={story.hasUnseenStory}
+              hasUnseenStory
             />
             <span className="text-xs text-gray-600 dark:text-gray-400 max-w-16 truncate">
-              {story.petName}
+              {pet.name}
             </span>
-          </button>
+          </Link>
         ))}
       </div>
     </div>
