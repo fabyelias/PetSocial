@@ -54,10 +54,11 @@ export function PostCard({ post, onLike, onBookmark, onComment }: PostCardProps)
   const [showFullCaption, setShowFullCaption] = useState(false);
   const [commentText, setCommentText] = useState('');
 
-  const hasMultipleMedia = post.media.length > 1;
-  const currentMedia = post.media[currentMediaIndex];
+  const media = post.media || [];
+  const hasMultipleMedia = media.length > 1;
+  const currentMedia = media[currentMediaIndex];
   const captionPreviewLength = 125;
-  const shouldTruncateCaption = post.caption.length > captionPreviewLength;
+  const shouldTruncateCaption = (post.caption || '').length > captionPreviewLength;
 
   const handlePrevMedia = () => {
     setCurrentMediaIndex((prev) => (prev > 0 ? prev - 1 : prev));
@@ -90,62 +91,64 @@ export function PostCard({ post, onLike, onBookmark, onComment }: PostCardProps)
       </header>
 
       {/* Media */}
-      <div className="relative bg-gray-100 dark:bg-gray-900">
-        {/* Carousel navigation */}
-        {hasMultipleMedia && currentMediaIndex > 0 && (
-          <button
-            onClick={handlePrevMedia}
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-white/80 dark:bg-black/50 rounded-full flex items-center justify-center shadow-md"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-        )}
+      {currentMedia && (
+        <div className="relative bg-gray-100 dark:bg-gray-900">
+          {/* Carousel navigation */}
+          {hasMultipleMedia && currentMediaIndex > 0 && (
+            <button
+              onClick={handlePrevMedia}
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-white/80 dark:bg-black/50 rounded-full flex items-center justify-center shadow-md"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          )}
 
-        {hasMultipleMedia && currentMediaIndex < post.media.length - 1 && (
-          <button
-            onClick={handleNextMedia}
-            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-white/80 dark:bg-black/50 rounded-full flex items-center justify-center shadow-md"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-        )}
+          {hasMultipleMedia && currentMediaIndex < media.length - 1 && (
+            <button
+              onClick={handleNextMedia}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-white/80 dark:bg-black/50 rounded-full flex items-center justify-center shadow-md"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          )}
 
-        {/* Media content */}
-        {currentMedia.type === 'image' ? (
-          <div className="relative aspect-square">
-            <Image
-              src={currentMedia.url}
-              alt={`Foto de ${post.pet.name}`}
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 600px"
-            />
-          </div>
-        ) : (
-          <video
-            src={currentMedia.url}
-            controls
-            className="w-full aspect-square object-cover"
-          />
-        )}
-
-        {/* Carousel indicators */}
-        {hasMultipleMedia && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
-            {post.media.map((_, index) => (
-              <div
-                key={index}
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full transition-colors',
-                  index === currentMediaIndex
-                    ? 'bg-primary-500'
-                    : 'bg-white/60'
-                )}
+          {/* Media content */}
+          {currentMedia.type === 'image' ? (
+            <div className="relative aspect-square">
+              <Image
+                src={currentMedia.url}
+                alt={`Foto de ${post.pet.name}`}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 600px"
               />
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ) : (
+            <video
+              src={currentMedia.url}
+              controls
+              className="w-full aspect-square object-cover"
+            />
+          )}
+
+          {/* Carousel indicators */}
+          {hasMultipleMedia && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
+              {media.map((_, index) => (
+                <div
+                  key={index}
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full transition-colors',
+                    index === currentMediaIndex
+                      ? 'bg-primary-500'
+                      : 'bg-white/60'
+                  )}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="p-4">
@@ -195,8 +198,8 @@ export function PostCard({ post, onLike, onBookmark, onComment }: PostCardProps)
           </Link>
           <span className="text-gray-800 dark:text-gray-200">
             {showFullCaption || !shouldTruncateCaption
-              ? post.caption
-              : `${post.caption.slice(0, captionPreviewLength)}...`}
+              ? (post.caption || '')
+              : `${(post.caption || '').slice(0, captionPreviewLength)}...`}
           </span>
           {shouldTruncateCaption && !showFullCaption && (
             <button
