@@ -307,44 +307,32 @@ if (typeof window !== 'undefined') {
     }
 
     if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
-      const currentUser = useAuthStore.getState().user;
+      const state = useAuthStore.getState();
 
-      // Si el usuario cambió (ej: otra pestaña inició sesión con otra cuenta), reinicializar
-      if (currentUser && currentUser.id !== session.user.id) {
-        const [user, pets] = await Promise.all([
-          loadProfile(session.user.id),
-          loadPets(session.user.id),
-        ]);
-        const savedPetId = localStorage.getItem('petsocial_current_pet');
-        const currentPetId = pets.find((p) => p.id === savedPetId)?.id || pets[0]?.id || null;
-        useAuthStore.setState({
-          user,
-          pets,
-          currentPetId,
-          isAuthenticated: true,
-          isInitialized: true,
-          isLoading: false,
-        });
-        return;
-      }
+      // Si login() está en curso, lo dejamos que maneje el estado (evita race condition)
+      if (state.isLoading) return;
 
-      // Si no había sesión activa (ej: inicio de sesión desde otra pestaña estando desconectado)
-      if (!currentUser) {
-        const [user, pets] = await Promise.all([
-          loadProfile(session.user.id),
-          loadPets(session.user.id),
-        ]);
-        const savedPetId = localStorage.getItem('petsocial_current_pet');
-        const currentPetId = pets.find((p) => p.id === savedPetId)?.id || pets[0]?.id || null;
-        useAuthStore.setState({
-          user,
-          pets,
-          currentPetId,
-          isAuthenticated: true,
-          isInitialized: true,
-          isLoading: false,
-        });
-      }
+      // Solo actuar si el usuario cambió (ej: otra pestaña inició sesión con otra cuenta)
+      const isDifferentUser = state.user && state.user.id !== session.user.id;
+      // O si no había sesión (ej: otra pestaña inició sesión estando desconectado en esta)
+      const wasUnauthenticated = !state.user && !state.isAuthenticated;
+
+      if (!isDifferentUser && !wasUnauthenticated) return;
+
+      const [user, pets] = await Promise.all([
+        loadProfile(session.user.id),
+        loadPets(session.user.id),
+      ]);
+      const savedPetId = localStorage.getItem('petsocial_current_pet');
+      const currentPetId = pets.find((p) => p.id === savedPetId)?.id || pets[0]?.id || null;
+      useAuthStore.setState({
+        user,
+        pets,
+        currentPetId,
+        isAuthenticated: true,
+        isInitialized: true,
+        isLoading: false,
+      });
     }
   });
 }
