@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Bell, Heart, MessageCircle, UserPlus } from 'lucide-react';
+import { Loader2, Bell, Heart, MessageCircle, UserPlus, Check, X } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import { Avatar } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -20,15 +21,55 @@ interface Notification {
   createdAt: string;
 }
 
+interface FriendRequest {
+  followerId: string;
+  petName: string;
+  petAvatar: string | null;
+  species: string;
+  createdAt: string;
+}
+
+const speciesLabels: Record<string, string> = {
+  dog: 'Perro', cat: 'Gato', bird: 'Ave', rabbit: 'Conejo',
+  hamster: 'Hamster', fish: 'Pez', reptile: 'Reptil', other: 'Otro',
+};
+
 export default function NotificationsPage() {
   const currentPet = useCurrentPet();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!currentPet) return;
 
     async function load() {
+      // Load pending friend requests
+      const { data: pendingFollows } = await supabase
+        .from('follows')
+        .select(`
+          created_at,
+          follower:pets!follower_id(id, name, avatar_url, species)
+        `)
+        .eq('following_id', currentPet!.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (pendingFollows) {
+        setFriendRequests(
+          pendingFollows.map((f) => {
+            const pet = f.follower as unknown as { id: string; name: string; avatar_url: string | null; species: string };
+            return {
+              followerId: pet.id,
+              petName: pet.name,
+              petAvatar: pet.avatar_url,
+              species: pet.species,
+              createdAt: f.created_at,
+            };
+          })
+        );
+      }
+
       // Get current pet's post IDs
       const { data: myPosts } = await supabase
         .from('posts')
@@ -95,7 +136,7 @@ export default function NotificationsPage() {
         }
       }
 
-      // New followers
+      // Accepted followers (show as notification)
       const { data: followers } = await supabase
         .from('follows')
         .select(`
@@ -103,6 +144,7 @@ export default function NotificationsPage() {
           follower:pets!follower_id(id, name, avatar_url)
         `)
         .eq('following_id', currentPet!.id)
+        .eq('status', 'accepted')
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -128,6 +170,38 @@ export default function NotificationsPage() {
     load();
   }, [currentPet?.id]);
 
+  const handleAcceptRequest = async (followerId: string) => {
+    if (!currentPet) return;
+    try {
+      await supabase
+        .from('follows')
+        .update({ status: 'accepted' })
+        .eq('follower_id', followerId)
+        .eq('following_id', currentPet.id);
+
+      setFriendRequests((prev) => prev.filter((r) => r.followerId !== followerId));
+      toast.success('Solicitud aceptada');
+    } catch {
+      toast.error('Error al aceptar');
+    }
+  };
+
+  const handleRejectRequest = async (followerId: string) => {
+    if (!currentPet) return;
+    try {
+      await supabase
+        .from('follows')
+        .delete()
+        .eq('follower_id', followerId)
+        .eq('following_id', currentPet.id);
+
+      setFriendRequests((prev) => prev.filter((r) => r.followerId !== followerId));
+      toast.success('Solicitud rechazada');
+    } catch {
+      toast.error('Error al rechazar');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -140,7 +214,53 @@ export default function NotificationsPage() {
     <div>
       <h1 className="text-2xl font-bold mb-4">Notificaciones</h1>
 
-      {notifications.length === 0 ? (
+      {/* Pending Friend Requests */}
+      {friendRequests.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Solicitudes de amistad ({friendRequests.length})
+          </h2>
+          <div className="space-y-2">
+            {friendRequests.map((req) => (
+              <div
+                key={req.followerId}
+                className="flex items-center gap-3 p-3 rounded-lg bg-primary-50 dark:bg-primary-900/10 border border-primary-100 dark:border-primary-900/20"
+              >
+                <Link href={`/pet/${req.followerId}`}>
+                  <Avatar src={req.petAvatar} alt={req.petName} size="md" />
+                </Link>
+                <div className="flex-1 min-w-0">
+                  <Link href={`/pet/${req.followerId}`} className="hover:underline">
+                    <p className="text-sm font-semibold">{req.petName}</p>
+                  </Link>
+                  <p className="text-xs text-gray-500">
+                    {speciesLabels[req.species] || req.species} · {formatRelativeTime(req.createdAt)}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => handleAcceptRequest(req.followerId)}
+                    className="btn-primary text-xs px-3 py-1.5 rounded-lg flex items-center gap-1"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Aceptar
+                  </button>
+                  <button
+                    onClick={() => handleRejectRequest(req.followerId)}
+                    className="btn-outline text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 text-red-500 border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Regular Notifications */}
+      {notifications.length === 0 && friendRequests.length === 0 ? (
         <EmptyState
           icon={Bell}
           title="Sin notificaciones"
@@ -160,7 +280,7 @@ export default function NotificationsPage() {
                   <span className="font-semibold">{n.petName}</span>
                   {n.type === 'like' && ' le gustó tu publicación'}
                   {n.type === 'comment' && ` comentó: "${n.content?.slice(0, 50)}${(n.content?.length || 0) > 50 ? '...' : ''}"`}
-                  {n.type === 'follow' && ' comenzó a seguirte'}
+                  {n.type === 'follow' && ' te sigue'}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {formatRelativeTime(n.createdAt)}

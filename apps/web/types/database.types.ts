@@ -231,16 +231,19 @@ export type Database = {
         Row: {
           follower_id: string;
           following_id: string;
+          status: string;
           created_at: string;
         };
         Insert: {
           follower_id: string;
           following_id: string;
+          status?: string;
           created_at?: string;
         };
         Update: {
           follower_id?: string;
           following_id?: string;
+          status?: string;
         };
         Relationships: [
           {
@@ -468,6 +471,71 @@ export type Database = {
             columns: ['post_id'];
             isOneToOne: false;
             referencedRelation: 'posts';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      stories: {
+        Row: {
+          id: string;
+          pet_id: string;
+          media_url: string;
+          caption: string | null;
+          created_at: string;
+          expires_at: string;
+        };
+        Insert: {
+          id?: string;
+          pet_id: string;
+          media_url: string;
+          caption?: string | null;
+          created_at?: string;
+          expires_at?: string;
+        };
+        Update: {
+          pet_id?: string;
+          media_url?: string;
+          caption?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'stories_pet_id_fkey';
+            columns: ['pet_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      story_views: {
+        Row: {
+          story_id: string;
+          pet_id: string;
+          viewed_at: string;
+        };
+        Insert: {
+          story_id: string;
+          pet_id: string;
+          viewed_at?: string;
+        };
+        Update: {
+          story_id?: string;
+          pet_id?: string;
+          viewed_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'story_views_story_id_fkey';
+            columns: ['story_id'];
+            isOneToOne: false;
+            referencedRelation: 'stories';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'story_views_pet_id_fkey';
+            columns: ['pet_id'];
+            isOneToOne: false;
+            referencedRelation: 'pets';
             referencedColumns: ['id'];
           },
         ];

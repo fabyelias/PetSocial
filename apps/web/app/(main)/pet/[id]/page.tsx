@@ -50,7 +50,7 @@ export default function PetProfilePage() {
   const [pet, setPet] = useState<PetProfile | null>(null);
   const [posts, setPosts] = useState<PetPost[]>([]);
   const [bookmarkedPosts, setBookmarkedPosts] = useState<PetPost[]>([]);
-  const [isFollowing, setIsFollowing] = useState(false);
+  const [followStatus, setFollowStatus] = useState<'none' | 'pending' | 'accepted'>('none');
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts');
   const isOwnPet = pet?.owner_id === user?.id;
@@ -98,12 +98,16 @@ export default function PetProfilePage() {
       if (currentPet && currentPet.id !== petId) {
         const { data: followData } = await supabase
           .from('follows')
-          .select('follower_id')
+          .select('follower_id, status')
           .eq('follower_id', currentPet.id)
           .eq('following_id', petId)
           .single();
 
-        setIsFollowing(!!followData);
+        if (followData) {
+          setFollowStatus(followData.status as 'pending' | 'accepted');
+        } else {
+          setFollowStatus('none');
+        }
       }
 
       setIsLoading(false);
@@ -152,14 +156,20 @@ export default function PetProfilePage() {
   const handleFollow = async () => {
     if (!currentPet) return;
     try {
-      if (isFollowing) {
+      if (followStatus === 'accepted') {
+        // Unfollow
         await supabase.from('follows').delete().eq('follower_id', currentPet.id).eq('following_id', petId);
-        setIsFollowing(false);
+        setFollowStatus('none');
         if (pet) setPet({ ...pet, followers_count: pet.followers_count - 1 });
+      } else if (followStatus === 'pending') {
+        // Cancel pending request
+        await supabase.from('follows').delete().eq('follower_id', currentPet.id).eq('following_id', petId);
+        setFollowStatus('none');
       } else {
-        await supabase.from('follows').insert({ follower_id: currentPet.id, following_id: petId });
-        setIsFollowing(true);
-        if (pet) setPet({ ...pet, followers_count: pet.followers_count + 1 });
+        // Send follow request (pending)
+        await supabase.from('follows').insert({ follower_id: currentPet.id, following_id: petId, status: 'pending' });
+        setFollowStatus('pending');
+        toast.success('Solicitud enviada');
       }
     } catch {
       toast.error('Error al seguir');
@@ -217,10 +227,14 @@ export default function PetProfilePage() {
                 onClick={handleFollow}
                 className={cn(
                   'text-sm px-6 py-2 rounded-lg font-medium',
-                  isFollowing ? 'btn-outline' : 'btn-primary'
+                  followStatus === 'accepted' ? 'btn-outline' :
+                  followStatus === 'pending' ? 'btn-outline text-amber-600 border-amber-300 dark:border-amber-700' :
+                  'btn-primary'
                 )}
               >
-                {isFollowing ? 'Siguiendo' : 'Seguir'}
+                {followStatus === 'accepted' ? 'Siguiendo' :
+                 followStatus === 'pending' ? 'Solicitud enviada' :
+                 'Seguir'}
               </button>
             )}
           </div>

@@ -26,19 +26,19 @@ export function RightSidebar() {
   const currentPet = useCurrentPet();
   const user = useUser();
   const [suggestedPets, setSuggestedPets] = useState<SuggestedPet[]>([]);
-  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [followStatuses, setFollowStatuses] = useState<Map<string, string>>(new Map());
   const [trendingTags, setTrendingTags] = useState<{ tag: string; posts: number }[]>([]);
 
   useEffect(() => {
     if (!currentPet || !user) return;
 
-    // Fetch who current pet is already following
+    // Fetch who current pet is already following (with status)
     supabase
       .from('follows')
-      .select('following_id')
+      .select('following_id, status')
       .eq('follower_id', currentPet.id)
       .then(({ data }) => {
-        if (data) setFollowingIds(new Set(data.map((f) => f.following_id)));
+        if (data) setFollowStatuses(new Map(data.map((f) => [f.following_id, f.status])));
       });
 
     supabase
@@ -77,13 +77,17 @@ export function RightSidebar() {
 
   const handleFollow = async (petId: string) => {
     if (!currentPet) return;
+    const currentStatus = followStatuses.get(petId);
     try {
-      if (followingIds.has(petId)) {
+      if (currentStatus === 'accepted' || currentStatus === 'pending') {
+        // Unfollow or cancel request
         await supabase.from('follows').delete().eq('follower_id', currentPet.id).eq('following_id', petId);
-        setFollowingIds((prev) => { const s = new Set(prev); s.delete(petId); return s; });
+        setFollowStatuses((prev) => { const m = new Map(prev); m.delete(petId); return m; });
       } else {
-        await supabase.from('follows').insert({ follower_id: currentPet.id, following_id: petId });
-        setFollowingIds((prev) => new Set(prev).add(petId));
+        // Send follow request
+        await supabase.from('follows').insert({ follower_id: currentPet.id, following_id: petId, status: 'pending' });
+        setFollowStatuses((prev) => new Map(prev).set(petId, 'pending'));
+        toast.success('Solicitud enviada');
       }
     } catch {
       toast.error('Error al seguir');
@@ -123,12 +127,18 @@ export function RightSidebar() {
                   {pet.breed && ` · ${pet.breed}`}
                 </p>
               </div>
-              <button
-                onClick={() => handleFollow(pet.id)}
-                className="text-xs font-semibold text-primary-600 hover:text-primary-500"
-              >
-                {followingIds.has(pet.id) ? 'Siguiendo' : 'Seguir'}
-              </button>
+              {(() => {
+                const status = followStatuses.get(pet.id);
+                if (status === 'accepted') return null; // Already following, hide button
+                return (
+                  <button
+                    onClick={() => handleFollow(pet.id)}
+                    className={`text-xs font-semibold ${status === 'pending' ? 'text-amber-500' : 'text-primary-600 hover:text-primary-500'}`}
+                  >
+                    {status === 'pending' ? 'Pendiente' : 'Seguir'}
+                  </button>
+                );
+              })()}
             </div>
           ))}
         </div>

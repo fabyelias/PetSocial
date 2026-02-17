@@ -46,23 +46,24 @@ export function MobileNav() {
       .eq('pet_id', currentPet.id);
     const myPostIds = myPosts?.map((p) => p.id) || [];
 
+    // Always count pending friend requests
+    const { count: pendingRequests } = await supabase
+      .from('follows')
+      .select('*', { count: 'exact', head: true })
+      .eq('following_id', currentPet.id)
+      .eq('status', 'pending');
+
     if (myPostIds.length === 0) {
-      const { count } = await supabase
-        .from('follows')
-        .select('*', { count: 'exact', head: true })
-        .eq('following_id', currentPet.id)
-        .gte('created_at', since);
-      setNotifCount(count || 0);
+      setNotifCount(pendingRequests || 0);
       return;
     }
 
-    const [{ count: likeCount }, { count: commentCount }, { count: followCount }] = await Promise.all([
+    const [{ count: likeCount }, { count: commentCount }] = await Promise.all([
       supabase.from('likes').select('*', { count: 'exact', head: true }).in('post_id', myPostIds).neq('pet_id', currentPet.id).gte('created_at', since),
       supabase.from('comments').select('*', { count: 'exact', head: true }).in('post_id', myPostIds).neq('pet_id', currentPet.id).gte('created_at', since),
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', currentPet.id).gte('created_at', since),
     ]);
 
-    setNotifCount((likeCount || 0) + (commentCount || 0) + (followCount || 0));
+    setNotifCount((likeCount || 0) + (commentCount || 0) + (pendingRequests || 0));
   }, [currentPet?.id]);
 
   useEffect(() => {

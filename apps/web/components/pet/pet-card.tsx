@@ -28,9 +28,10 @@ interface PetCardProps {
   onFollow?: () => void;
   showFollowButton?: boolean;
   isFollowing?: boolean;
+  isPending?: boolean;
 }
 
-export function PetCard({ pet, onFollow, showFollowButton = true, isFollowing = false }: PetCardProps) {
+export function PetCard({ pet, onFollow, showFollowButton = true, isFollowing = false, isPending = false }: PetCardProps) {
   return (
     <div className="card p-4 flex items-center gap-4">
       <Link href={`/pet/${pet.id}`}>
@@ -51,16 +52,16 @@ export function PetCard({ pet, onFollow, showFollowButton = true, isFollowing = 
           {formatNumber(pet.followers_count)} seguidores
         </p>
       </div>
-      {showFollowButton && onFollow && (
+      {showFollowButton && onFollow && !isFollowing && (
         <button
           onClick={onFollow}
           className={
-            isFollowing
-              ? 'btn-outline text-xs px-4 py-1.5 rounded-lg'
+            isPending
+              ? 'btn-outline text-xs px-4 py-1.5 rounded-lg text-amber-600 border-amber-300 dark:border-amber-700'
               : 'btn-primary text-xs px-4 py-1.5 rounded-lg'
           }
         >
-          {isFollowing ? 'Siguiendo' : 'Seguir'}
+          {isPending ? 'Pendiente' : 'Seguir'}
         </button>
       )}
     </div>
