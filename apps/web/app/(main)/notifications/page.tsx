@@ -43,6 +43,14 @@ export default function NotificationsPage() {
   useEffect(() => {
     if (!currentPet) return;
 
+    // Realtime: recargar cuando haya nuevas interacciones para este pet
+    const channel = supabase
+      .channel(`notifs-page-${currentPet.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows', filter: `following_id=eq.${currentPet.id}` }, () => load())
+      .subscribe();
+
     async function load() {
       // Load pending friend requests
       const { data: pendingFollows } = await supabase
@@ -168,6 +176,10 @@ export default function NotificationsPage() {
     }
 
     load();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentPet?.id]);
 
   const handleAcceptRequest = async (followerId: string) => {

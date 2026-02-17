@@ -12,7 +12,7 @@ import {
   LogOut,
   ChevronDown,
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuthStore, useCurrentPet, usePets } from '@/stores/auth.store';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -36,8 +36,10 @@ export function Sidebar() {
   const [showPetSelector, setShowPetSelector] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
   const [msgCount, setMsgCount] = useState(0);
+  const prevNotifCountRef = useRef(0);
+  const prevMsgCountRef = useRef(0);
 
-  const fetchNotifCount = useCallback(async () => {
+  const fetchNotifCount = useCallback(async (playSound = false) => {
     if (!currentPet) return;
     // Count notifications since last time user visited /notifications
     const lastSeenKey = `notif_seen_${currentPet.id}`;
@@ -58,7 +60,10 @@ export function Sidebar() {
       .eq('status', 'pending');
 
     if (myPostIds.length === 0) {
-      setNotifCount((pendingRequests || 0));
+      const newCount = pendingRequests || 0;
+      if (playSound && newCount > prevNotifCountRef.current) playNotificationSound();
+      prevNotifCountRef.current = newCount;
+      setNotifCount(newCount);
       return;
     }
 
@@ -67,17 +72,23 @@ export function Sidebar() {
       supabase.from('comments').select('*', { count: 'exact', head: true }).in('post_id', myPostIds).neq('pet_id', currentPet.id).gte('created_at', since),
     ]);
 
-    setNotifCount((likeCount || 0) + (commentCount || 0) + (pendingRequests || 0));
+    const newCount = (likeCount || 0) + (commentCount || 0) + (pendingRequests || 0);
+    if (playSound && newCount > prevNotifCountRef.current) playNotificationSound();
+    prevNotifCountRef.current = newCount;
+    setNotifCount(newCount);
   }, [currentPet?.id]);
 
-  const fetchMsgCount = useCallback(async () => {
+  const fetchMsgCount = useCallback(async (playSound = false) => {
     if (!currentPet) return;
     const { count } = await supabase
       .from('messages')
       .select('*', { count: 'exact', head: true })
       .eq('receiver_pet_id', currentPet.id)
       .eq('is_read', false);
-    setMsgCount(count || 0);
+    const newCount = count || 0;
+    if (playSound && newCount > prevMsgCountRef.current) playMessageSound();
+    prevMsgCountRef.current = newCount;
+    setMsgCount(newCount);
   }, [currentPet?.id]);
 
   useEffect(() => {
@@ -91,13 +102,15 @@ export function Sidebar() {
     }, 30000);
 
     // Real-time subscription for instant notifications
+    // postgres_changes dispara para toda la tabla; fetchNotifCount/fetchMsgCount
+    // filtran por el pet actual y solo suenan si el count realmente aumentó
     if (currentPet) {
       const channel = supabase
-        .channel('sidebar-notifs')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => { fetchNotifCount(); playNotificationSound(); })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => { fetchNotifCount(); playNotificationSound(); })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => { fetchNotifCount(); playNotificationSound(); })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchMsgCount(); playMessageSound(); })
+        .channel(`sidebar-notifs-${currentPet.id}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => { fetchNotifCount(true); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => { fetchNotifCount(true); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => { fetchNotifCount(true); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchMsgCount(true); })
         .subscribe();
 
       return () => {

@@ -292,16 +292,59 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// Escuchar cambios de sesión de Supabase
+// Escuchar cambios de sesión de Supabase (incluyendo cambios desde otras pestañas)
 if (typeof window !== 'undefined') {
-  supabase.auth.onAuthStateChange((event) => {
+  supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_OUT') {
       useAuthStore.setState({
         user: null,
         pets: [],
         currentPetId: null,
         isAuthenticated: false,
+        isInitialized: true,
       });
+      return;
+    }
+
+    if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+      const currentUser = useAuthStore.getState().user;
+
+      // Si el usuario cambió (ej: otra pestaña inició sesión con otra cuenta), reinicializar
+      if (currentUser && currentUser.id !== session.user.id) {
+        const [user, pets] = await Promise.all([
+          loadProfile(session.user.id),
+          loadPets(session.user.id),
+        ]);
+        const savedPetId = localStorage.getItem('petsocial_current_pet');
+        const currentPetId = pets.find((p) => p.id === savedPetId)?.id || pets[0]?.id || null;
+        useAuthStore.setState({
+          user,
+          pets,
+          currentPetId,
+          isAuthenticated: true,
+          isInitialized: true,
+          isLoading: false,
+        });
+        return;
+      }
+
+      // Si no había sesión activa (ej: inicio de sesión desde otra pestaña estando desconectado)
+      if (!currentUser) {
+        const [user, pets] = await Promise.all([
+          loadProfile(session.user.id),
+          loadPets(session.user.id),
+        ]);
+        const savedPetId = localStorage.getItem('petsocial_current_pet');
+        const currentPetId = pets.find((p) => p.id === savedPetId)?.id || pets[0]?.id || null;
+        useAuthStore.setState({
+          user,
+          pets,
+          currentPetId,
+          isAuthenticated: true,
+          isInitialized: true,
+          isLoading: false,
+        });
+      }
     }
   });
 }

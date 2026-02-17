@@ -10,15 +10,20 @@ function getAudioContext(): AudioContext | null {
   return audioContext;
 }
 
-function playTone(frequency: number, duration: number, type: OscillatorType = 'sine', volume = 0.3) {
+async function ensureAudioReady(): Promise<AudioContext | null> {
   const ctx = getAudioContext();
-  if (!ctx) return;
-
-  // Resume context if suspended (browser autoplay policy)
+  if (!ctx) return null;
   if (ctx.state === 'suspended') {
-    ctx.resume();
+    try {
+      await ctx.resume();
+    } catch {
+      return null;
+    }
   }
+  return ctx;
+}
 
+function playTone(ctx: AudioContext, frequency: number, duration: number, type: OscillatorType = 'sine', volume = 0.3) {
   const oscillator = ctx.createOscillator();
   const gainNode = ctx.createGain();
 
@@ -36,22 +41,18 @@ function playTone(frequency: number, duration: number, type: OscillatorType = 's
 }
 
 /** Friendly two-tone chime for notifications (like, comment, follow) */
-export function playNotificationSound() {
-  const ctx = getAudioContext();
+export async function playNotificationSound() {
+  const ctx = await ensureAudioReady();
   if (!ctx) return;
-  if (ctx.state === 'suspended') ctx.resume();
 
-  // First note
-  playTone(880, 0.15, 'sine', 0.2);
-  // Second note (higher, after short delay)
-  setTimeout(() => playTone(1175, 0.2, 'sine', 0.15), 120);
+  playTone(ctx, 880, 0.15, 'sine', 0.2);
+  setTimeout(() => playTone(ctx, 1175, 0.2, 'sine', 0.15), 120);
 }
 
 /** Soft pop sound for new chat messages */
-export function playMessageSound() {
-  const ctx = getAudioContext();
+export async function playMessageSound() {
+  const ctx = await ensureAudioReady();
   if (!ctx) return;
-  if (ctx.state === 'suspended') ctx.resume();
 
-  playTone(660, 0.12, 'sine', 0.2);
+  playTone(ctx, 660, 0.12, 'sine', 0.2);
 }
