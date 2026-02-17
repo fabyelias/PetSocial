@@ -66,11 +66,15 @@ export default function NewPetPage() {
     if (!user) return;
 
     try {
+      // Usar el UID real de la sesión Supabase para garantizar que coincide con auth.uid() en RLS
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) throw new Error('Sesión no válida, por favor inicia sesión nuevamente');
+
       let avatarUrl: string | null = null;
       if (avatarFile) {
         avatarUrl = await uploadFile(
           'avatars',
-          `${user.id}/${Date.now()}-${avatarFile.name}`,
+          `${authUser.id}/${Date.now()}-${avatarFile.name}`,
           avatarFile
         );
       }
@@ -78,7 +82,7 @@ export default function NewPetPage() {
       const { data: pet, error } = await supabase
         .from('pets')
         .insert({
-          owner_id: user.id,
+          owner_id: authUser.id,
           name: data.name,
           species: data.species,
           breed: data.breed || null,

@@ -573,3 +573,33 @@ CREATE POLICY "covers_insert_auth"
 CREATE POLICY "covers_delete_own"
   ON storage.objects FOR DELETE
   USING (bucket_id = 'covers' AND auth.role() = 'authenticated' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ============================================================
+-- 6. GRANTS para el rol authenticated
+-- ============================================================
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+
+GRANT SELECT ON profiles TO anon, authenticated;
+GRANT INSERT, UPDATE ON profiles TO authenticated;
+
+GRANT SELECT ON pets TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON pets TO authenticated;
+
+GRANT SELECT ON posts TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON posts TO authenticated;
+
+GRANT SELECT ON post_media TO anon, authenticated;
+GRANT INSERT, DELETE ON post_media TO authenticated;
+
+GRANT SELECT ON follows TO anon, authenticated;
+GRANT INSERT, DELETE ON follows TO authenticated;
+
+GRANT SELECT ON likes TO anon, authenticated;
+GRANT INSERT, DELETE ON likes TO authenticated;
+
+GRANT SELECT ON comments TO anon, authenticated;
+GRANT INSERT, UPDATE, DELETE ON comments TO authenticated;
+
+GRANT SELECT ON bookmarks TO anon, authenticated;
+GRANT INSERT, DELETE ON bookmarks TO authenticated;
