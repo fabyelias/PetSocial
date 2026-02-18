@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "description": "PetSocial - The Social Network for Pets",
   "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "cd apps/web && npm run dev",
-    "build": "cd apps/web && npm run build",
-    "start": "cd apps/web && npm start",
-    "lint": "cd apps/web && npm run lint"
+    "dev": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspace=apps/web",
+    "start": "npm start --workspace=apps/web",
+    "lint": "npm run lint --workspace=apps/web"
   }
 }

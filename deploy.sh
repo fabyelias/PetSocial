@@ -35,12 +35,13 @@ else
   cd "$APP_DIR"
 fi
 
-echo "===> Instalando dependencias de la raíz..."
+echo "===> Instalando dependencias..."
 cd "$APP_DIR"
 npm ci
 
-echo "===> Construyendo Next.js..."
+echo "===> Construyendo aplicación..."
 npm run build
+
 
 echo "===> Reiniciando aplicación con PM2..."
 cd "$APP_DIR"
