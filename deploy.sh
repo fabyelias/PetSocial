@@ -35,9 +35,9 @@ else
   cd "$APP_DIR"
 fi
 
-echo "===> Instalando dependencias del frontend..."
-cd "$APP_DIR/apps/web"
-npm ci --omit=dev
+echo "===> Instalando dependencias de la raíz..."
+cd "$APP_DIR"
+npm ci
 
 echo "===> Construyendo Next.js..."
 npm run build
