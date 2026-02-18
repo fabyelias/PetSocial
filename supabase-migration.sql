@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS pets (
   country TEXT,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  is_private BOOLEAN NOT NULL DEFAULT FALSE,
   followers_count INTEGER NOT NULL DEFAULT 0,
   following_count INTEGER NOT NULL DEFAULT 0,
   posts_count INTEGER NOT NULL DEFAULT 0,
@@ -79,6 +80,9 @@ CREATE INDEX IF NOT EXISTS idx_pets_owner ON pets(owner_id);
 CREATE INDEX IF NOT EXISTS idx_pets_species ON pets(species);
 CREATE INDEX IF NOT EXISTS idx_pets_country ON pets(country);
 CREATE INDEX IF NOT EXISTS idx_pets_active ON pets(is_active);
+
+-- privacy flag for pet profiles (added 2026-02)
+ALTER TABLE pets ADD COLUMN IF NOT EXISTS is_private BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -412,18 +416,35 @@ CREATE POLICY "posts_select_visible"
   USING (
     is_hidden = false
     AND (
-      visibility = 'public'
+      -- owner always allowed
+      EXISTS (
+        SELECT 1 FROM pets WHERE id = posts.pet_id AND owner_id = auth.uid()
+      )
+      -- if profile is private, only accepted followers see anything
       OR (
-        visibility = 'followers'
-        AND EXISTS (
-          SELECT 1 FROM follows f
-          JOIN pets p ON p.id = f.follower_id
-          WHERE f.following_id = posts.pet_id
-            AND p.owner_id = auth.uid()
+        NOT EXISTS (
+          SELECT 1 FROM pets WHERE id = posts.pet_id AND is_private = true
+        )
+        AND (
+          visibility = 'public'
+          OR (
+            visibility = 'followers'
+            AND EXISTS (
+              SELECT 1 FROM follows f
+              JOIN pets p ON p.id = f.follower_id
+              WHERE f.following_id = posts.pet_id
+                AND p.owner_id = auth.uid()
+            )
+          )
         )
       )
+      -- even if profile is private, accepted followers can see posts regardless of visibility setting
       OR EXISTS (
-        SELECT 1 FROM pets WHERE id = posts.pet_id AND owner_id = auth.uid()
+        SELECT 1 FROM follows f
+        JOIN pets p ON p.id = f.follower_id
+        WHERE f.following_id = posts.pet_id
+          AND f.status = 'accepted'
+          AND p.owner_id = auth.uid()
       )
     )
   );

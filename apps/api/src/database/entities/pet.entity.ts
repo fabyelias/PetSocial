@@ -78,6 +78,9 @@ export class Pet extends SoftDeletableEntity {
   @Column({ name: 'is_verified', type: 'boolean', default: false })
   isVerified: boolean;
 
+  @Column({ name: 'is_private', type: 'boolean', default: false })
+  isPrivate: boolean;
+
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 

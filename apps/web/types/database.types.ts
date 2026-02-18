@@ -65,6 +65,7 @@ export type Database = {
           country: string | null;
           is_active: boolean;
           is_verified: boolean;
+          is_private: boolean;
           followers_count: number;
           following_count: number;
           posts_count: number;
@@ -85,6 +86,7 @@ export type Database = {
           country?: string | null;
           is_active?: boolean;
           is_verified?: boolean;
+          is_private?: boolean;
           followers_count?: number;
           following_count?: number;
           posts_count?: number;
@@ -104,6 +106,7 @@ export type Database = {
           country?: string | null;
           is_active?: boolean;
           is_verified?: boolean;
+          is_private?: boolean;
           followers_count?: number;
           following_count?: number;
           posts_count?: number;

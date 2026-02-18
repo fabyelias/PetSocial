@@ -75,12 +75,13 @@ export function MobileNav() {
     }, 30000);
 
     if (currentPet) {
+      // use a dedicated channel per pet so unrelated events don't even reach this client
       const channel = supabase
-        .channel('mobile-notifs')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => { fetchNotifCount(); playNotificationSound(); })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => { fetchNotifCount(); playNotificationSound(); })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => { fetchNotifCount(); playNotificationSound(); })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchMsgCount(); playMessageSound(); })
+        .channel(`mobile-notifs-${currentPet.id}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'likes' }, () => { fetchNotifCount(true); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments' }, () => { fetchNotifCount(true); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'follows' }, () => { fetchNotifCount(true); })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchMsgCount(true); })
         .subscribe();
 
       return () => {

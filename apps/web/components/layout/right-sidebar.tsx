@@ -20,6 +20,7 @@ interface SuggestedPet {
   breed: string | null;
   avatar_url: string | null;
   followers_count: number;
+  is_private?: boolean;
 }
 
 export function RightSidebar() {
@@ -43,9 +44,10 @@ export function RightSidebar() {
 
     supabase
       .from('pets')
-      .select('id, name, species, breed, avatar_url, followers_count')
+      .select('id, name, species, breed, avatar_url, followers_count, is_private')
       .neq('owner_id', user.id)
       .eq('is_active', true)
+      .eq('is_private', false) // don't suggest private profiles
       .order('followers_count', { ascending: false })
       .limit(5)
       .then(({ data }) => {

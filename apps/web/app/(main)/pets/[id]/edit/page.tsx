@@ -32,6 +32,7 @@ const editPetSchema = z.object({
   birthDate: z.string().optional().or(z.literal('')),
   city: z.string().max(100).optional().or(z.literal('')),
   country: z.string().max(100).optional().or(z.literal('')),
+  isPrivate: z.boolean().optional(),
 });
 
 type EditPetForm = z.infer<typeof editPetSchema>;
@@ -72,6 +73,7 @@ export default function EditPetPage() {
           birthDate: data.birth_date || '',
           city: data.city || '',
           country: data.country || '',
+          isPrivate: data.is_private || false,
         });
         setCurrentAvatarUrl(data.avatar_url);
       }
@@ -104,6 +106,7 @@ export default function EditPetPage() {
           city: data.city || null,
           country: data.country || null,
           avatar_url: avatarUrl,
+          is_private: data.isPrivate || false,
         })
         .eq('id', petId);
 
@@ -114,6 +117,7 @@ export default function EditPetPage() {
         species: data.species,
         breed: data.breed || null,
         avatarUrl: avatarUrl,
+        isPrivate: data.isPrivate || false,
       });
 
       toast.success('Mascota actualizada');
@@ -153,6 +157,18 @@ export default function EditPetPage() {
               shape="circle"
               previewUrl={currentAvatarUrl}
             />
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              {...register('isPrivate')}
+              id="isPrivate"
+              className="checkbox"
+            />
+            <label htmlFor="isPrivate" className="text-sm">
+              Perfil privado
+            </label>
           </div>
 
           <div>

@@ -34,6 +34,7 @@ const createPetSchema = z.object({
   birthDate: z.string().optional().or(z.literal('')),
   city: z.string().max(100).optional().or(z.literal('')),
   country: z.string().max(100).optional().or(z.literal('')),
+  isPrivate: z.boolean().optional(),
 });
 
 type CreatePetForm = z.infer<typeof createPetSchema>;
@@ -91,6 +92,7 @@ export default function NewPetPage() {
           city: data.city || null,
           country: data.country || null,
           avatar_url: avatarUrl,
+          is_private: data.isPrivate || false,
         })
         .select()
         .single();
@@ -106,6 +108,7 @@ export default function NewPetPage() {
         followersCount: 0,
         followingCount: 0,
         postsCount: 0,
+        isPrivate: pet.is_private || false,
       });
 
       setCurrentPet(pet.id);
@@ -138,6 +141,32 @@ export default function NewPetPage() {
               onChange={setAvatarFile}
               shape="circle"
             />
+          </div>
+
+          {/* Perfil público / privado */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              {...register('isPrivate')}
+              id="isPrivate"
+              className="checkbox"
+            />
+            <label htmlFor="isPrivate" className="text-sm">
+              Perfil privado
+            </label>
+          </div>
+
+          {/* Privacy toggle */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              {...register('isPrivate')}
+              id="isPrivate"
+              className="checkbox"
+            />
+            <label htmlFor="isPrivate" className="text-sm">
+              Perfil privado
+            </label>
           </div>
 
           {/* Nombre */}

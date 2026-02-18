@@ -33,6 +33,7 @@ interface PetProfile {
   followers_count: number;
   following_count: number;
   posts_count: number;
+  is_private: boolean; // profile visibility flag
 }
 
 interface PetPost {
@@ -70,30 +71,8 @@ export default function PetProfilePage() {
         return;
       }
 
-      setPet(petData);
-
-      const { data: postsData } = await supabase
-        .from('posts')
-        .select(`
-          id, likes_count, comments_count,
-          media:post_media(type, url, position)
-        `)
-        .eq('pet_id', petId)
-        .eq('is_hidden', false)
-        .order('created_at', { ascending: false });
-
-      if (postsData) {
-        setPosts(
-          postsData.map((p) => ({
-            id: p.id,
-            likes_count: p.likes_count,
-            comments_count: p.comments_count,
-            media: ((p.media as unknown as { type: 'image' | 'video'; url: string; position: number }[]) || [])
-              .sort((a, b) => a.position - b.position)
-              .map((m) => ({ type: m.type, url: m.url })),
-          }))
-        );
-      }
+      // determine follow status and whether we can show posts
+      let allowedToView = true;
 
       if (currentPet && currentPet.id !== petId) {
         const { data: followData } = await supabase
@@ -105,8 +84,41 @@ export default function PetProfilePage() {
 
         if (followData) {
           setFollowStatus(followData.status as 'pending' | 'accepted');
+          if (petData.is_private && followData.status !== 'accepted') {
+            allowedToView = false;
+          }
         } else {
           setFollowStatus('none');
+          if (petData.is_private) {
+            allowedToView = false;
+          }
+        }
+      }
+
+      setPet(petData);
+
+      if (allowedToView) {
+        const { data: postsData } = await supabase
+          .from('posts')
+          .select(`
+          id, likes_count, comments_count,
+          media:post_media(type, url, position)
+        `)
+          .eq('pet_id', petId)
+          .eq('is_hidden', false)
+          .order('created_at', { ascending: false });
+
+        if (postsData) {
+          setPosts(
+            postsData.map((p) => ({
+              id: p.id,
+              likes_count: p.likes_count,
+              comments_count: p.comments_count,
+              media: ((p.media as unknown as { type: 'image' | 'video'; url: string; position: number }[]) || [])
+                .sort((a, b) => a.position - b.position)
+                .map((m) => ({ type: m.type, url: m.url })),
+            }))
+          );
         }
       }
 
@@ -196,6 +208,27 @@ export default function PetProfilePage() {
     );
   }
 
+  // blocked by privacy
+  const isOwnPet = pet.owner_id === user?.id;
+  if (pet.is_private && !isOwnPet && followStatus !== 'accepted') {
+    return (
+      <div className="max-w-2xl mx-auto text-center py-12 space-y-4">
+        <Avatar src={pet.avatar_url} alt={pet.name} size="2xl" className="mx-auto" />
+        <h1 className="text-2xl font-bold">{pet.name}</h1>
+        <p className="text-gray-500">Este perfil es privado.</p>
+        {followStatus === 'none' && (
+          <button
+            onClick={handleFollow}
+            className="btn-primary px-6 py-2 rounded-lg"
+          >
+            Seguir
+          </button>
+        )}
+        {followStatus === 'pending' && <p className="text-sm text-gray-500">Solicitud enviada</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       {/* Cover */}
@@ -210,7 +243,12 @@ export default function PetProfilePage() {
         <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-10">
           <Avatar src={pet.avatar_url} alt={pet.name} size="2xl" className="ring-4 ring-white dark:ring-gray-950" />
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">{pet.name}</h1>
+            <h1 className="text-2xl font-bold">
+              {pet.name}
+              {isOwnPet && pet.is_private && (
+                <span className="text-sm text-gray-500 ml-2">🔒 Privado</span>
+              )}
+            </h1>
             <p className="text-gray-500 text-sm">
               {speciesLabels[pet.species] || pet.species}
               {pet.breed && ` · ${pet.breed}`}

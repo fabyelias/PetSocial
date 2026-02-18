@@ -26,6 +26,7 @@ export interface Pet {
   followersCount: number;
   followingCount: number;
   postsCount: number;
+  isPrivate?: boolean; // whether profile is private
 }
 
 interface AuthState {
@@ -44,6 +45,7 @@ interface AuthState {
   initialize: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName?: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   setCurrentPet: (petId: string) => void;
@@ -93,6 +95,7 @@ async function loadPets(userId: string): Promise<Pet[]> {
     followersCount: p.followers_count,
     followingCount: p.following_count,
     postsCount: p.posts_count,
+    isPrivate: p.is_private || false,
   }));
 }
 
@@ -220,6 +223,17 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           set({ isLoading: false });
           throw error;
+        }
+      },
+
+      // Send password reset email
+      resetPassword: async (email: string) => {
+        set({ isLoading: true });
+        try {
+          const { error } = await supabase.auth.resetPasswordForEmail(email);
+          if (error) throw new Error(error.message);
+        } finally {
+          set({ isLoading: false });
         }
       },
 
